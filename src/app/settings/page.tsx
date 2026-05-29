@@ -166,7 +166,7 @@ function Section({
               <AccountActions
                 id={a.id}
                 email={a.email}
-                canDuplicate={a.provider === "gmail"}
+                canDuplicate={["gmail", "naver", "imap"].includes(a.provider)}
               />
             </li>
           ))}

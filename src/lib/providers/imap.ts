@@ -53,26 +53,143 @@ export async function testImapConnection(
   await withImapConnection(opts, async () => {});
 }
 
+// ─────────────────────────────────────────────────────────────
+//   IMAP "뷰" 쿼리 파서
+//   query 필드를 폴더 선택 + 서버사이드 SEARCH 로 해석.
+//   토큰(공백 구분, AND): folder:/from:/to:/cc:/subject:(subj:)/
+//   body:(text:)/since:YYYY-MM-DD/before:YYYY-MM-DD/unseen/seen,
+//   key 없는 단어는 본문(text) 검색. 공백 포함 값은 "..." 로.
+// ─────────────────────────────────────────────────────────────
+
+export interface ImapSearchCriteria {
+  from?: string;
+  to?: string;
+  cc?: string;
+  subject?: string;
+  body?: string;
+  since?: Date;
+  before?: Date;
+  seen?: boolean;
+}
+
+export interface ImapView {
+  folder: string;
+  criteria: ImapSearchCriteria | null; // null = 검색 없음 (폴더 최신 N개)
+}
+
+function tokenizeQuery(q: string): string[] {
+  const tokens: string[] = [];
+  const re = /"([^"]*)"|(\S+)/g;
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(q)) !== null) tokens.push(m[1] ?? m[2]);
+  return tokens;
+}
+
+export function parseImapView(query?: string | null): ImapView {
+  let folder = "INBOX";
+  const crit: ImapSearchCriteria = {};
+  const bodyParts: string[] = [];
+  let hasFilter = false;
+
+  if (query && query.trim()) {
+    for (const raw of tokenizeQuery(query.trim())) {
+      const idx = raw.indexOf(":");
+      const key = idx > 0 ? raw.slice(0, idx).toLowerCase() : "";
+      const val = idx > 0 ? raw.slice(idx + 1) : raw;
+      switch (key) {
+        case "folder":
+        case "mailbox":
+          if (val) folder = val;
+          break;
+        case "from":
+          crit.from = val;
+          hasFilter = true;
+          break;
+        case "to":
+          crit.to = val;
+          hasFilter = true;
+          break;
+        case "cc":
+          crit.cc = val;
+          hasFilter = true;
+          break;
+        case "subject":
+        case "subj":
+          crit.subject = val;
+          hasFilter = true;
+          break;
+        case "body":
+        case "text":
+          bodyParts.push(val);
+          hasFilter = true;
+          break;
+        case "since": {
+          const d = new Date(val);
+          if (!Number.isNaN(d.getTime())) {
+            crit.since = d;
+            hasFilter = true;
+          }
+          break;
+        }
+        case "before": {
+          const d = new Date(val);
+          if (!Number.isNaN(d.getTime())) {
+            crit.before = d;
+            hasFilter = true;
+          }
+          break;
+        }
+        default: {
+          const low = raw.toLowerCase();
+          if (low === "unseen" || low === "unread") {
+            crit.seen = false;
+            hasFilter = true;
+          } else if (low === "seen" || low === "read") {
+            crit.seen = true;
+            hasFilter = true;
+          } else {
+            bodyParts.push(raw);
+            hasFilter = true;
+          }
+        }
+      }
+    }
+    if (bodyParts.length) crit.body = bodyParts.join(" ");
+  }
+
+  return { folder, criteria: hasFilter ? crit : null };
+}
+
 export async function fetchInboxFromClient(
   client: ImapFlow,
   limit: number,
+  query?: string | null,
 ): Promise<MailMessage[]> {
-  const lock = await client.getMailboxLock("INBOX");
+  const { folder, criteria } = parseImapView(query);
+  const lock = await client.getMailboxLock(folder);
   try {
-    const status = await client.status("INBOX", { messages: true });
-    const total = status.messages ?? 0;
-    if (total === 0) return [];
+    let source: string;
+    let byUid = false;
 
-    const from = Math.max(1, total - limit + 1);
-    const range = `${from}:${total}`;
+    if (criteria) {
+      const uids = await client.search(criteria, { uid: true });
+      if (!uids || uids.length === 0) return [];
+      source = uids.slice(-limit).join(","); // 최신(높은 UID) limit개
+      byUid = true;
+    } else {
+      const status = await client.status(folder, { messages: true });
+      const total = status.messages ?? 0;
+      if (total === 0) return [];
+      const from = Math.max(1, total - limit + 1);
+      source = `${from}:${total}`;
+    }
 
     const messages: MailMessage[] = [];
-    for await (const msg of client.fetch(range, {
-      envelope: true,
-      flags: true,
-      uid: true,
-      internalDate: true,
-    })) {
+    for await (const msg of client.fetch(
+      source,
+      { envelope: true, flags: true, uid: true, internalDate: true },
+      byUid ? { uid: true } : undefined,
+    )) {
       const envelope = msg.envelope;
       const fromAddr = envelope?.from?.[0];
       const email = fromAddr?.address ?? "";
@@ -96,8 +213,12 @@ export async function fetchInboxFromClient(
 
 export async function fetchUnreadCountFromClient(
   client: ImapFlow,
+  query?: string | null,
 ): Promise<number | null> {
-  const status = await client.status("INBOX", { unseen: true });
+  const { folder, criteria } = parseImapView(query);
+  // 검색 필터가 있으면 정확한 미읽음 수를 status 로 못 구함 → null (가져온 메시지에서 계산)
+  if (criteria) return null;
+  const status = await client.status(folder, { unseen: true });
   return status.unseen ?? null;
 }
 
@@ -121,8 +242,9 @@ function parsedAddrToMailAddr(
 export async function fetchMessageFromClient(
   client: ImapFlow,
   uid: number,
+  folder = "INBOX",
 ): Promise<MailMessageDetail> {
-  const lock = await client.getMailboxLock("INBOX");
+  const lock = await client.getMailboxLock(folder);
   try {
     const result = await client.fetchOne(
       String(uid),
@@ -205,13 +327,12 @@ function basicCredsFromAccount(account: Account): ImapConnectOptions {
 export const imapProvider: MailProvider = {
   async fetchInbox(account: Account, limit: number): Promise<MailMessage[]> {
     return withImapConnection(basicCredsFromAccount(account), (c) =>
-      fetchInboxFromClient(c, limit),
+      fetchInboxFromClient(c, limit, account.query),
     );
   },
   async fetchUnreadCount(account: Account): Promise<number | null> {
-    return withImapConnection(
-      basicCredsFromAccount(account),
-      fetchUnreadCountFromClient,
+    return withImapConnection(basicCredsFromAccount(account), (c) =>
+      fetchUnreadCountFromClient(c, account.query),
     );
   },
   async fetchMessage(
@@ -220,8 +341,9 @@ export const imapProvider: MailProvider = {
   ): Promise<MailMessageDetail> {
     const uid = parseInt(messageId, 10);
     if (!Number.isFinite(uid)) throw new Error("유효하지 않은 message ID");
+    const { folder } = parseImapView(account.query);
     return withImapConnection(basicCredsFromAccount(account), (c) =>
-      fetchMessageFromClient(c, uid),
+      fetchMessageFromClient(c, uid, folder),
     );
   },
 };

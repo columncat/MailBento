@@ -26,6 +26,14 @@ const GMAIL_QUERY_EXAMPLES: { label: string; q: string }[] = [
   { label: "특정 도메인에서 온 메일", q: "from:*@purdue.edu" },
 ];
 
+const IMAP_QUERY_EXAMPLES: { label: string; q: string }[] = [
+  { label: "특정 발신자", q: "from:boss@company.com" },
+  { label: "제목 포함", q: "subject:세금계산서" },
+  { label: "안 읽음만", q: "unseen" },
+  { label: "특정 폴더", q: "folder:보낸메일함" },
+  { label: "날짜 이후", q: "since:2026-01-01" },
+];
+
 export function EditAccountForm({
   id,
   provider,
@@ -45,7 +53,9 @@ export function EditAccountForm({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const supportsQuery = provider === "gmail";
+  const isGmail = provider === "gmail";
+  const isImap = provider === "naver" || provider === "imap";
+  const supportsQuery = isGmail || isImap;
 
   const onSave = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -149,8 +159,8 @@ export function EditAccountForm({
 
       {supportsQuery && (
         <Field
-          label="Gmail 검색 쿼리"
-          hint="비워두면 받은편지함(INBOX). 채우면 이 박스는 해당 검색 결과만 보여줌."
+          label={isGmail ? "Gmail 검색 쿼리" : "IMAP 폴더/검색 쿼리"}
+          hint="비워두면 받은편지함(INBOX). 채우면 이 박스는 해당 결과만 보여줌."
         >
           <input
             value={query}
@@ -159,7 +169,7 @@ export function EditAccountForm({
             className={`${inputCls} font-mono`}
           />
           <div className="mt-2 flex flex-wrap gap-1.5">
-            {GMAIL_QUERY_EXAMPLES.map((ex) => (
+            {(isGmail ? GMAIL_QUERY_EXAMPLES : IMAP_QUERY_EXAMPLES).map((ex) => (
               <button
                 key={ex.q}
                 type="button"
@@ -171,17 +181,33 @@ export function EditAccountForm({
               </button>
             ))}
           </div>
-          <p className="mt-2 text-[10.5px] text-(--color-fg-4)">
-            Gmail 검색창과 동일 문법. 자세한 연산자 →{" "}
-            <a
-              href="https://support.google.com/mail/answer/7190"
-              target="_blank"
-              rel="noreferrer"
-              className="underline hover:text-(--color-fg-3)"
-            >
-              Google 공식 문서
-            </a>
-          </p>
+          {isGmail ? (
+            <p className="mt-2 text-[10.5px] text-(--color-fg-4)">
+              Gmail 검색창과 동일 문법. 자세한 연산자 →{" "}
+              <a
+                href="https://support.google.com/mail/answer/7190"
+                target="_blank"
+                rel="noreferrer"
+                className="underline hover:text-(--color-fg-3)"
+              >
+                Google 공식 문서
+              </a>
+            </p>
+          ) : (
+            <p className="mt-2 text-[10.5px] leading-relaxed text-(--color-fg-4)">
+              토큰(공백 = AND):{" "}
+              <code className="text-(--color-fg-3)">folder:</code>{" "}
+              <code className="text-(--color-fg-3)">from:</code>{" "}
+              <code className="text-(--color-fg-3)">to:</code>{" "}
+              <code className="text-(--color-fg-3)">subject:</code>{" "}
+              <code className="text-(--color-fg-3)">text:</code>{" "}
+              <code className="text-(--color-fg-3)">since:YYYY-MM-DD</code>{" "}
+              <code className="text-(--color-fg-3)">before:</code>{" "}
+              <code className="text-(--color-fg-3)">unseen</code>/
+              <code className="text-(--color-fg-3)">seen</code>. 공백 포함 값은{" "}
+              {'"따옴표"'}. 예: <code>folder:보낸메일함 from:naver.com unseen</code>
+            </p>
+          )}
         </Field>
       )}
 
