@@ -2,7 +2,7 @@ services:
   mailbento:
     build: .
     image: mailbento:latest
-    container_name: mailbento
+    container_name: MailBento
     restart: unless-stopped
     ports:
       - "3000:3000"
