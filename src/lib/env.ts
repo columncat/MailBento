@@ -7,25 +7,6 @@ const envSchema = z.object({
 
   DATABASE_PATH: z.string().default("./data/mailbento.db"),
 
-  GOOGLE_CLIENT_ID: z.string().optional(),
-  GOOGLE_CLIENT_SECRET: z.string().optional(),
-  GOOGLE_REDIRECT_URI: z
-    .string()
-    .url()
-    .default("http://localhost:3000/api/auth/google/callback"),
-
-  MICROSOFT_CLIENT_ID: z.string().optional(),
-  MICROSOFT_CLIENT_SECRET: z.string().optional(),
-  MICROSOFT_TENANT: z.string().default("common"),
-  MICROSOFT_REDIRECT_URI: z
-    .string()
-    .url()
-    .default("http://localhost:3000/api/auth/microsoft/callback"),
-  MICROSOFT_IMAP_REDIRECT_URI: z
-    .string()
-    .url()
-    .default("http://localhost:3000/api/auth/microsoft-imap/callback"),
-
   REFRESH_INTERVAL_SECONDS: z.coerce.number().int().positive().default(180),
   MESSAGES_PER_BOX: z.coerce.number().int().positive().max(50).default(15),
 

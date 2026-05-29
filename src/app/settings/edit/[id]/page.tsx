@@ -36,7 +36,7 @@ export default async function EditAccountPage({
         </Link>
         <div className="flex items-center gap-3">
           <div className="grid h-10 w-10 place-items-center rounded-lg bg-(--color-surface) ring-1 ring-(--color-border)">
-            <ProviderIcon provider={account.provider} size={22} />
+            <ProviderIcon size={22} />
           </div>
           <div className="min-w-0">
             <h1
@@ -55,7 +55,6 @@ export default async function EditAccountPage({
       <section className="rounded-[var(--radius-card)] bg-(--color-surface) p-6 ring-1 ring-(--color-border-soft)">
         <EditAccountForm
           id={account.id}
-          provider={account.provider}
           initialDisplayName={account.displayName}
           initialQuery={account.query}
           initialIconUrl={account.iconUrl}

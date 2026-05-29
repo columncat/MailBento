@@ -18,7 +18,7 @@ export default function ImapSettingsPage() {
         </Link>
         <div className="flex items-center gap-3">
           <div className="grid h-10 w-10 place-items-center rounded-lg bg-(--color-surface) ring-1 ring-(--color-border)">
-            <ProviderIcon provider="imap" size={22} />
+            <ProviderIcon size={22} />
           </div>
           <div>
             <h1

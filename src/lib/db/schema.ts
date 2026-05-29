@@ -1,43 +1,29 @@
 import { sql } from "drizzle-orm";
 import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
-export const PROVIDERS = [
-  "gmail",
-  "outlook",
-  "outlook_imap",
-  "naver",
-  "imap",
-] as const;
+// IMAP 단일 provider (앱 비밀번호 기반). OAuth 계열은 모두 제거됨.
+export const PROVIDERS = ["imap"] as const;
 export type Provider = (typeof PROVIDERS)[number];
 
 export const accounts = sqliteTable("accounts", {
   id: integer("id").primaryKey({ autoIncrement: true }),
-  provider: text("provider", { enum: PROVIDERS }).notNull(),
+  provider: text("provider", { enum: PROVIDERS }).notNull().default("imap"),
 
-  /** 사용자가 보기 좋게 붙이는 이름 (e.g. "Work Gmail"). */
+  /** 카드 헤더에 보일 이름. */
   displayName: text("display_name").notNull(),
   /** 실제 이메일 주소. */
   email: text("email").notNull(),
 
-  /** OAuth (gmail, outlook) — 암호화된 토큰. */
-  accessTokenEnc: text("access_token_enc"),
-  refreshTokenEnc: text("refresh_token_enc"),
-  /** access token expiry (unix seconds). */
-  expiresAt: integer("expires_at"),
-
-  /** IMAP (naver) — 호스트/포트/사용자/암호화된 비밀번호. */
+  /** IMAP — 호스트/포트/사용자/암호화된 (앱) 비밀번호. */
   imapHost: text("imap_host"),
   imapPort: integer("imap_port"),
   imapUsername: text("imap_username"),
   imapPasswordEnc: text("imap_password_enc"),
 
   /**
-   * Provider 별 검색 쿼리 (선택).
-   * - Gmail: Gmail search syntax (e.g. "label:purdue", "from:boss@x.com is:unread")
-   *   null/빈 문자열 → 기본 INBOX
-   * - 다른 provider: 현재 미사용 (향후 확장 가능)
-   *
-   * 같은 OAuth 자격증명을 여러 "뷰" 로 보고 싶을 때 사용 — 계정 복제 후 query 만 다르게.
+   * IMAP "뷰" 쿼리 (선택) — 폴더 선택 + 서버 SEARCH.
+   * 예: "folder:보낸메일함 from:naver.com unseen". 비우면 INBOX 최신.
+   * 계정 복제 후 query 만 다르게 주면 같은 메일함의 여러 뷰를 만들 수 있음.
    */
   query: text("query"),
 

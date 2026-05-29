@@ -15,21 +15,15 @@ export interface ImapConnectOptions {
   host: string;
   port: number;
   user: string;
-  pass?: string;
-  accessToken?: string;
+  pass: string;
 }
 
 function makeClient(opts: ImapConnectOptions): ImapFlow {
-  if (!opts.pass && !opts.accessToken) {
-    throw new Error("IMAP: pass 또는 accessToken 중 하나가 필요합니다.");
-  }
   return new ImapFlow({
     host: opts.host,
     port: opts.port,
     secure: opts.port === 993,
-    auth: opts.accessToken
-      ? { user: opts.user, accessToken: opts.accessToken }
-      : { user: opts.user, pass: opts.pass! },
+    auth: { user: opts.user, pass: opts.pass },
     logger: false,
   });
 }

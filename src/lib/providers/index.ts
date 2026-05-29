@@ -1,16 +1,9 @@
 import type { Provider } from "../db/schema";
-import { gmailProvider } from "./gmail";
 import { imapProvider } from "./imap";
-import { outlookProvider } from "./outlook";
-import { outlookImapProvider } from "./outlook-imap";
 import type { MailProvider } from "./types";
 
-const PROVIDERS: Partial<Record<Provider, MailProvider>> = {
-  gmail: gmailProvider,
-  outlook: outlookProvider,
-  outlook_imap: outlookImapProvider,
-  // Naver 와 generic IMAP 은 같은 어댑터 (basic auth + app password)
-  naver: imapProvider,
+// IMAP 단일 provider (앱 비밀번호 기반).
+const PROVIDERS: Record<Provider, MailProvider> = {
   imap: imapProvider,
 };
 

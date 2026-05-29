@@ -36,6 +36,13 @@
       "when": 1780061943434,
       "tag": "0004_magical_glorian",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1780074845269,
+      "tag": "0005_known_dazzler",
+      "breakpoints": true
     }
   ]
 }

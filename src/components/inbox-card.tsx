@@ -10,15 +10,6 @@ import { cn, formatRelativeTime } from "@/lib/utils";
 import { MessageModal } from "./message-modal";
 import { ProviderIcon } from "./provider-icon";
 
-/** Provider 별 기본 웹메일 URL — account.webUrl 이 비어있을 때 fallback. */
-const DEFAULT_WEB_URL: Record<Provider, string> = {
-  gmail: "https://mail.google.com/",
-  outlook: "https://outlook.live.com/mail/",
-  outlook_imap: "https://outlook.office.com/mail/",
-  naver: "https://mail.naver.com/",
-  imap: "",
-};
-
 export interface InboxCardData {
   account: {
     id: number;
@@ -42,7 +33,7 @@ export function InboxCard({ data }: { data: InboxCardData }) {
 
   // override 값이 있으면 우선 사용
   const shownEmail = account.displayEmail ?? account.email;
-  const webUrl = account.webUrl ?? DEFAULT_WEB_URL[account.provider] ?? "";
+  const webUrl = account.webUrl ?? "";
 
   return (
     <>
@@ -51,11 +42,7 @@ export function InboxCard({ data }: { data: InboxCardData }) {
         <header className="flex items-center justify-between border-b border-(--color-border-soft) px-5 py-4">
           <div className="flex min-w-0 items-center gap-3">
             <div className="grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-(--color-bg-2) ring-1 ring-(--color-border)">
-              <ProviderIcon
-                provider={account.provider}
-                overrideUrl={account.iconUrl}
-                size={32}
-              />
+              <ProviderIcon overrideUrl={account.iconUrl} size={32} />
             </div>
             <div className="min-w-0">
               <div className="truncate text-sm font-medium text-(--color-fg)">
@@ -160,7 +147,6 @@ export function InboxCard({ data }: { data: InboxCardData }) {
 
       <MessageModal
         accountId={account.id}
-        accountProvider={account.provider}
         accountDisplayName={account.displayName}
         messageId={openMessageId}
         onClose={() => setOpenMessageId(null)}

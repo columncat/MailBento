@@ -4,14 +4,12 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { AlertCircle, Loader2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import type { Provider } from "@/lib/db/schema";
 import type { MailMessageDetail } from "@/lib/providers/types";
 
 import { ProviderIcon } from "./provider-icon";
 
 interface Props {
   accountId: number;
-  accountProvider: Provider;
   accountDisplayName: string;
   messageId: string | null;
   onClose: () => void;
@@ -19,7 +17,6 @@ interface Props {
 
 export function MessageModal({
   accountId,
-  accountProvider,
   accountDisplayName,
   messageId,
   onClose,
@@ -83,7 +80,7 @@ export function MessageModal({
           <div className="flex items-start justify-between gap-4 border-b border-(--color-border-soft) px-6 py-4">
             <div className="flex min-w-0 items-start gap-3">
               <div className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-(--color-bg-2) ring-1 ring-(--color-border)">
-                <ProviderIcon provider={accountProvider} size={18} />
+                <ProviderIcon size={18} />
               </div>
               <div className="min-w-0 flex-1">
                 <Dialog.Title asChild>

@@ -1,17 +1,19 @@
 # MailBento
 
-여러 이메일 계정(Gmail × 2, Outlook × 2, Naver Mail × 2)을 한 페이지에서 동시에 보는 개인용 대시보드.
+여러 IMAP 메일함을 한 페이지에서 동시에 보는 개인용 대시보드.
 
 ## 구조
 
 - **Frontend**: Next.js 15 (App Router) + TypeScript + Tailwind CSS v4
 - **Backend**: Next.js Route Handlers + Server Actions
 - **DB**: SQLite + Drizzle ORM (`./data/mailbento.db`)
-- **Provider 어댑터**
-  - Gmail: Google OAuth 2.0 + Gmail API
-  - Outlook: Microsoft OAuth 2.0 + Microsoft Graph
-  - Naver: IMAP + 앱 비밀번호 (`imapflow`)
-- **암호화**: AES-256-GCM (Node `crypto`) — refresh token / IMAP 앱 비밀번호 at rest
+- **메일**: IMAP + 앱 비밀번호 (`imapflow`) — Naver / Daum / iCloud / Yandex /
+  Fastmail / GMX 등. Gmail·Outlook도 2단계 인증 + 앱 비밀번호로 IMAP 연결 가능.
+- **메일박스 뷰**: 계정 복제 + IMAP 쿼리(`folder:` / `from:` / `subject:` /
+  `unseen` / `since:` …)로 폴더·검색별 박스 구성.
+- **암호화**: AES-256-GCM (Node `crypto`) — IMAP 앱 비밀번호 at rest
+- **백업**: `/settings` 에서 계정·메일박스·위젯·표시설정을 JSON 한 파일로
+  내보내기/불러오기 (전체 재현).
 - **배포**: Docker (Next.js standalone output) → Synology Container Manager
 - **접근**: Tailscale (인터넷 노출 없음)
 
@@ -20,29 +22,29 @@
 ```bash
 npm install
 cp .env.example .env.local
-# .env.local 에 OAuth 자격증명 / ENCRYPTION_KEY 채우기
-npm run db:migrate
+# .env.local 에 ENCRYPTION_KEY / (선택) AUTH_PASSWORD·AUTH_SECRET 채우기
+npm run db:migrate   # (Docker/런타임에서는 부팅 시 자동 적용)
 npm run dev
 ```
+
+그 뒤 `/settings → 계정 추가`에서 IMAP 메일함을 등록합니다.
 
 ## 환경변수
 
 `.env.example` 참고. 핵심:
 
-- `ENCRYPTION_KEY` — 32바이트 base64 (`openssl rand -base64 32`)
-- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `GOOGLE_REDIRECT_URI`
-- `MICROSOFT_CLIENT_ID` / `MICROSOFT_CLIENT_SECRET` / `MICROSOFT_REDIRECT_URI`
+- `ENCRYPTION_KEY` — 32바이트 base64 (`openssl rand -base64 32`). IMAP 비밀번호 암호화 키.
+- `AUTH_PASSWORD` / `AUTH_SECRET` — (선택) 비밀번호 잠금. 둘 다 비우면 인증 비활성.
 - `DATABASE_PATH` (기본 `./data/mailbento.db`)
 
-## OAuth 앱 등록 (개발자 콘솔)
+## 메일박스 추가 (IMAP)
 
-- **Google Cloud Console** → APIs & Services → Credentials → OAuth 2.0 Client ID (Web)
-  - 스코프: `https://www.googleapis.com/auth/gmail.readonly`
-  - Redirect URI: `http://localhost:3000/api/auth/google/callback`
-- **Microsoft Entra (Azure Portal)** → App registrations → New registration
-  - 스코프: `Mail.Read`, `offline_access`, `User.Read`
-  - Redirect URI: `http://localhost:3000/api/auth/microsoft/callback`
-- **Naver Mail** → 환경설정 → POP3/IMAP 사용 + 앱 비밀번호 발급
+각 서비스에서 IMAP을 켜고 **앱 비밀번호**를 발급받아 `/settings`에서 등록:
+
+- **Naver** → 환경설정 → POP3/IMAP 사용 + 앱 비밀번호
+- **Daum** → 환경설정 → IMAP/SMTP 사용 (+ 2단계 인증 시 앱 비밀번호)
+- **iCloud / Yandex / Fastmail / GMX** → 보안 설정에서 IMAP + 앱 비밀번호
+- **Gmail / Outlook** → 2단계 인증 후 앱 비밀번호 발급 → IMAP 호스트로 등록
 
 ## Docker 배포
 

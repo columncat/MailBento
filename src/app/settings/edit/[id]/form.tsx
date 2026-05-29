@@ -5,11 +5,9 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 
 import { ProviderIcon } from "@/components/provider-icon";
-import type { Provider } from "@/lib/db/schema";
 
 interface Props {
   id: number;
-  provider: Provider;
   initialDisplayName: string;
   initialQuery: string | null;
   initialIconUrl: string | null;
@@ -17,14 +15,6 @@ interface Props {
   initialWebUrl: string | null;
   realEmail: string;
 }
-
-const GMAIL_QUERY_EXAMPLES: { label: string; q: string }[] = [
-  { label: "특정 라벨 (예: Purdue)", q: "label:purdue" },
-  { label: "특정 발신자", q: "from:boss@company.com" },
-  { label: "안 읽음 중요표시", q: "is:unread is:important" },
-  { label: "받은편지함 + 특정 라벨 제외", q: "in:inbox -label:promotions" },
-  { label: "특정 도메인에서 온 메일", q: "from:*@purdue.edu" },
-];
 
 const IMAP_QUERY_EXAMPLES: { label: string; q: string }[] = [
   { label: "특정 발신자", q: "from:boss@company.com" },
@@ -36,7 +26,6 @@ const IMAP_QUERY_EXAMPLES: { label: string; q: string }[] = [
 
 export function EditAccountForm({
   id,
-  provider,
   initialDisplayName,
   initialQuery,
   initialIconUrl,
@@ -53,10 +42,6 @@ export function EditAccountForm({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const isGmail = provider === "gmail";
-  const isImap = provider === "naver" || provider === "imap";
-  const supportsQuery = isGmail || isImap;
-
   const onSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setSaving(true);
@@ -67,7 +52,7 @@ export function EditAccountForm({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           displayName: displayName.trim(),
-          query: supportsQuery ? query.trim() || null : undefined,
+          query: query.trim() || null,
           iconUrl: iconUrl.trim() || null,
           displayEmail: displayEmail.trim() || null,
           webUrl: webUrl.trim() || null,
@@ -95,11 +80,7 @@ export function EditAccountForm({
         </div>
         <div className="flex items-center gap-3">
           <div className="grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-(--color-surface) ring-1 ring-(--color-border)">
-            <ProviderIcon
-              provider={provider}
-              overrideUrl={iconUrl.trim() || null}
-              size={32}
-            />
+            <ProviderIcon overrideUrl={iconUrl.trim() || null} size={32} />
           </div>
           <div className="min-w-0 flex-1">
             <div className="truncate text-sm font-medium text-(--color-fg)">
@@ -135,7 +116,7 @@ export function EditAccountForm({
 
       <Field
         label="아이콘 URL"
-        hint="비워두면 provider 기본 아이콘 (Gmail/Outlook/Naver 로고). 추천: dashboard-icons, favicon.io"
+        hint="비워두면 기본 메일 아이콘. 추천: dashboard-icons, favicon.io"
       >
         <input
           value={iconUrl}
@@ -157,9 +138,9 @@ export function EditAccountForm({
         />
       </Field>
 
-      {supportsQuery && (
+      {
         <Field
-          label={isGmail ? "Gmail 검색 쿼리" : "IMAP 폴더/검색 쿼리"}
+          label="IMAP 폴더/검색 쿼리"
           hint="비워두면 받은편지함(INBOX). 채우면 이 박스는 해당 결과만 보여줌."
         >
           <input
@@ -169,7 +150,7 @@ export function EditAccountForm({
             className={`${inputCls} font-mono`}
           />
           <div className="mt-2 flex flex-wrap gap-1.5">
-            {(isGmail ? GMAIL_QUERY_EXAMPLES : IMAP_QUERY_EXAMPLES).map((ex) => (
+            {IMAP_QUERY_EXAMPLES.map((ex) => (
               <button
                 key={ex.q}
                 type="button"
@@ -181,19 +162,7 @@ export function EditAccountForm({
               </button>
             ))}
           </div>
-          {isGmail ? (
-            <p className="mt-2 text-[10.5px] text-(--color-fg-4)">
-              Gmail 검색창과 동일 문법. 자세한 연산자 →{" "}
-              <a
-                href="https://support.google.com/mail/answer/7190"
-                target="_blank"
-                rel="noreferrer"
-                className="underline hover:text-(--color-fg-3)"
-              >
-                Google 공식 문서
-              </a>
-            </p>
-          ) : (
+          {
             <p className="mt-2 text-[10.5px] leading-relaxed text-(--color-fg-4)">
               토큰(공백 = AND):{" "}
               <code className="text-(--color-fg-3)">folder:</code>{" "}
@@ -207,9 +176,9 @@ export function EditAccountForm({
               <code className="text-(--color-fg-3)">seen</code>. 공백 포함 값은{" "}
               {'"따옴표"'}. 예: <code>folder:보낸메일함 from:naver.com unseen</code>
             </p>
-          )}
+          }
         </Field>
-      )}
+      }
 
       {error && (
         <div className="rounded-lg bg-(--color-danger)/10 px-3 py-2 text-xs text-(--color-danger) ring-1 ring-(--color-danger)/30">

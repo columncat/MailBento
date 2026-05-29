@@ -14,9 +14,7 @@ import {
   rectSortingStrategy,
 } from "@dnd-kit/sortable";
 import {
-  Clock,
   LayoutDashboard,
-  LogOut,
   Mail,
   RefreshCw,
   Settings as SettingsIcon,
@@ -28,13 +26,8 @@ import type { Provider } from "@/lib/db/schema";
 import {
   COLUMN_CLASS,
   DEFAULT_COLUMNS,
-  DEFAULT_MODE,
-  DEFAULT_THEME,
   STORAGE_KEYS,
-  applyThemeAndModeToHtml,
   type ColumnsPref,
-  type ModePref,
-  type ThemeKey,
 } from "@/lib/preferences";
 import type { InboxFetchResult, MailMessage } from "@/lib/providers/types";
 import { cn, formatRelativeTime } from "@/lib/utils";
@@ -47,7 +40,6 @@ import {
 } from "@/lib/widget-storage";
 
 import { InboxCard } from "./inbox-card";
-import { PreferencesPopover } from "./preferences-popover";
 import { SortableInboxCard } from "./sortable-inbox-card";
 import { WidgetFoldersWing } from "./widget-folders-wing";
 import { WidgetHeader } from "./widget-header";
@@ -80,14 +72,12 @@ export function Dashboard({
   initialAccounts,
   initialWidgetState,
   refreshIntervalSeconds,
-  authEnabled,
   widgetEnabled,
   onWidgetToggle,
 }: {
   initialAccounts: AccountSummary[];
   initialWidgetState: WidgetState;
   refreshIntervalSeconds: number;
-  authEnabled: boolean;
   widgetEnabled: boolean;
   onWidgetToggle: (v: boolean) => void;
 }) {
@@ -104,9 +94,7 @@ export function Dashboard({
   const [refreshing, setRefreshing] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
-  // ─ 표시 prefs (localStorage) ─
-  const [theme, setTheme] = useState<ThemeKey>(DEFAULT_THEME);
-  const [mode, setMode] = useState<ModePref>(DEFAULT_MODE);
+  // ─ 표시 prefs: 열 개수만 대시보드에서 사용 (테마/모드는 /settings 에서) ─
   const [columns, setColumns] = useState<ColumnsPref>(DEFAULT_COLUMNS);
 
   // ─ 위젯 레이아웃 측정: 폴더 한 변 = 헤더 높이 ─
@@ -171,17 +159,9 @@ export function Dashboard({
 
   useEffect(() => {
     try {
-      const savedTheme = localStorage.getItem(STORAGE_KEYS.theme) as
-        | ThemeKey
-        | null;
-      const savedMode = localStorage.getItem(STORAGE_KEYS.mode) as
-        | ModePref
-        | null;
       const savedCols = localStorage.getItem(STORAGE_KEYS.columns) as
         | ColumnsPref
         | null;
-      if (savedTheme) setTheme(savedTheme);
-      if (savedMode) setMode(savedMode);
       if (savedCols) setColumns(savedCols);
     } catch {
       /* */
@@ -205,35 +185,6 @@ export function Dashboard({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const onThemeChange = (t: ThemeKey) => {
-    setTheme(t);
-    try {
-      localStorage.setItem(STORAGE_KEYS.theme, t);
-    } catch {
-      /* */
-    }
-    applyThemeAndModeToHtml(t, mode);
-  };
-
-  const onModeChange = (m: ModePref) => {
-    setMode(m);
-    try {
-      localStorage.setItem(STORAGE_KEYS.mode, m);
-    } catch {
-      /* */
-    }
-    applyThemeAndModeToHtml(theme, m);
-  };
-
-  const onColumnsChange = (c: ColumnsPref) => {
-    setColumns(c);
-    try {
-      localStorage.setItem(STORAGE_KEYS.columns, c);
-    } catch {
-      /* */
-    }
-  };
 
   const updateFolders = (folders: WidgetFolder[]) => {
     setWidgetState((prev) => {
@@ -439,43 +390,13 @@ export function Dashboard({
               />
             </span>
           </button>
-          <PreferencesPopover
-            theme={theme}
-            mode={mode}
-            columns={columns}
-            onThemeChange={onThemeChange}
-            onModeChange={onModeChange}
-            onColumnsChange={onColumnsChange}
-          />
-          {authEnabled && (
-            <Link
-              href="/history"
-              className="grid h-9 w-9 place-items-center rounded-full bg-(--color-surface) text-(--color-fg-3) ring-1 ring-(--color-border-soft) transition hover:bg-(--color-surface-2) hover:text-(--color-fg-2)"
-              aria-label="로그인 기록"
-              title="로그인 기록"
-            >
-              <Clock className="h-4 w-4" />
-            </Link>
-          )}
           <Link
             href="/settings"
             className="flex items-center gap-2 rounded-full bg-(--color-accent-soft) px-4 py-2 text-sm text-(--color-accent-strong) ring-1 ring-(--color-accent)/40 transition hover:bg-(--color-accent)/25"
           >
             <SettingsIcon className="h-4 w-4" />
-            계정
+            설정
           </Link>
-          {authEnabled && (
-            <form action="/api/logout" method="POST">
-              <button
-                type="submit"
-                className="grid h-9 w-9 place-items-center rounded-full bg-(--color-surface) text-(--color-fg-3) ring-1 ring-(--color-border-soft) transition hover:bg-(--color-danger)/20 hover:text-(--color-danger)"
-                aria-label="로그아웃"
-                title="로그아웃"
-              >
-                <LogOut className="h-4 w-4" />
-              </button>
-            </form>
-          )}
         </div>
       </header>
 
