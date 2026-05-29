@@ -1,0 +1,41 @@
+{
+  "version": "7",
+  "dialect": "sqlite",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "6",
+      "when": 1779981235380,
+      "tag": "0000_sticky_mordo",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1780027717398,
+      "tag": "0001_safe_cargill",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1780029557952,
+      "tag": "0002_bent_hulk",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1780037791938,
+      "tag": "0003_friendly_sumo",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "6",
+      "when": 1780061943434,
+      "tag": "0004_magical_glorian",
+      "breakpoints": true
+    }
+  ]
+}

@@ -1,0 +1,26 @@
+node_modules
+.next
+out
+build
+dist
+.git
+.gitignore
+*.log
+npm-debug.log*
+
+# 시크릿 / 로컬 데이터 — 이미지에 절대 포함 금지
+.env
+.env.local
+.env.*.local
+data
+*.db
+*.db-shm
+*.db-wal
+*.db-journal
+
+# 기타
+.DS_Store
+Thumbs.db
+*.tsbuildinfo
+README.md
+.claude

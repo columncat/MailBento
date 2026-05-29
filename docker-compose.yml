@@ -1,0 +1,18 @@
+services:
+  mailbento:
+    build: .
+    image: mailbento:latest
+    container_name: mailbento
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    # 시크릿/설정은 .env.local 에서 주입 (.env.example 참고, git 에는 미포함)
+    env_file:
+      - .env.local
+    environment:
+      # DB 경로는 볼륨 위치로 고정 (.env.local 값보다 우선)
+      DATABASE_PATH: /app/data/mailbento.db
+      MIGRATIONS_DIR: /app/drizzle
+    volumes:
+      # SQLite DB 영속화 — 재배포해도 계정/폴더/코크보드/메모 유지
+      - ./data:/app/data

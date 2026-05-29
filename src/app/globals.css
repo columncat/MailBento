@@ -1,0 +1,308 @@
+@import "tailwindcss";
+
+@theme {
+  /* ===== 기본 (Forest, dark) — 따뜻한 다크 + 그린 ===== */
+  --color-bg:          oklch(0.155 0.006 60);
+  --color-bg-2:        oklch(0.125 0.006 60);
+  --color-surface:     oklch(0.215 0.006 60);
+  --color-surface-2:   oklch(0.245 0.006 60);
+  --color-surface-hi:  oklch(0.285 0.006 60);
+  --color-border:      oklch(0.32  0.006 60);
+  --color-border-soft: oklch(0.26  0.006 60);
+
+  --color-fg:    oklch(0.96 0.005 80);
+  --color-fg-2:  oklch(0.82 0.006 80);
+  --color-fg-3:  oklch(0.62 0.006 80);
+  --color-fg-4:  oklch(0.46 0.006 80);
+
+  --color-accent:        oklch(0.78 0.14 145);
+  --color-accent-soft:   oklch(0.78 0.14 145 / 0.18);
+  --color-accent-strong: oklch(0.85 0.16 145);
+  --color-backdrop-1:    oklch(0.78 0.14 145 / 0.07);
+  --color-backdrop-2:    oklch(0.78 0.12 60  / 0.05);
+
+  --color-danger: oklch(0.68 0.20 25);
+  --color-warn:   oklch(0.82 0.16 80);
+
+  --font-sans: "Pretendard Variable", Pretendard, ui-sans-serif, system-ui,
+    -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas,
+    monospace;
+  --font-serif: "Instrument Serif", "Times New Roman", serif;
+
+  --radius-card: 22px;
+  --radius-app: 18px;
+  --radius-pill: 999px;
+}
+
+/* ============================================================
+   다크 모드 — 각 테마별 accent + 살짝 다른 bg 톤
+   ============================================================ */
+@layer base {
+  .theme-forest.mode-dark,
+  .theme-forest {
+    --color-bg:          oklch(0.155 0.006 60);
+    --color-bg-2:        oklch(0.125 0.006 60);
+    --color-surface:     oklch(0.215 0.006 60);
+    --color-surface-2:   oklch(0.245 0.006 60);
+    --color-surface-hi:  oklch(0.285 0.006 60);
+    --color-border:      oklch(0.32  0.006 60);
+    --color-border-soft: oklch(0.26  0.006 60);
+    --color-accent:        oklch(0.78 0.14 145);
+    --color-accent-soft:   oklch(0.78 0.14 145 / 0.18);
+    --color-accent-strong: oklch(0.85 0.16 145);
+    --color-backdrop-1:    oklch(0.78 0.14 145 / 0.07);
+    --color-backdrop-2:    oklch(0.78 0.12 60  / 0.05);
+  }
+
+  .theme-ocean.mode-dark,
+  .theme-ocean {
+    --color-bg:          oklch(0.150 0.014 235);
+    --color-bg-2:        oklch(0.120 0.014 235);
+    --color-surface:     oklch(0.210 0.014 235);
+    --color-surface-2:   oklch(0.240 0.014 235);
+    --color-surface-hi:  oklch(0.280 0.014 235);
+    --color-border:      oklch(0.32  0.014 235);
+    --color-border-soft: oklch(0.26  0.014 235);
+    --color-accent:        oklch(0.78 0.14 220);
+    --color-accent-soft:   oklch(0.78 0.14 220 / 0.18);
+    --color-accent-strong: oklch(0.85 0.16 220);
+    --color-backdrop-1:    oklch(0.78 0.14 220 / 0.08);
+    --color-backdrop-2:    oklch(0.78 0.12 195 / 0.05);
+  }
+
+  .theme-sunset.mode-dark,
+  .theme-sunset {
+    --color-bg:          oklch(0.155 0.012 40);
+    --color-bg-2:        oklch(0.125 0.012 40);
+    --color-surface:     oklch(0.215 0.012 40);
+    --color-surface-2:   oklch(0.245 0.012 40);
+    --color-surface-hi:  oklch(0.285 0.012 40);
+    --color-border:      oklch(0.33  0.012 40);
+    --color-border-soft: oklch(0.27  0.012 40);
+    --color-accent:        oklch(0.79 0.16 55);
+    --color-accent-soft:   oklch(0.79 0.16 55 / 0.18);
+    --color-accent-strong: oklch(0.85 0.17 55);
+    --color-backdrop-1:    oklch(0.79 0.16 55  / 0.08);
+    --color-backdrop-2:    oklch(0.79 0.14 20  / 0.05);
+  }
+
+  .theme-lavender.mode-dark,
+  .theme-lavender {
+    --color-bg:          oklch(0.155 0.014 295);
+    --color-bg-2:        oklch(0.125 0.014 295);
+    --color-surface:     oklch(0.215 0.014 295);
+    --color-surface-2:   oklch(0.245 0.014 295);
+    --color-surface-hi:  oklch(0.285 0.014 295);
+    --color-border:      oklch(0.33  0.014 295);
+    --color-border-soft: oklch(0.27  0.014 295);
+    --color-accent:        oklch(0.80 0.13 295);
+    --color-accent-soft:   oklch(0.80 0.13 295 / 0.18);
+    --color-accent-strong: oklch(0.86 0.15 295);
+    --color-backdrop-1:    oklch(0.80 0.13 295 / 0.08);
+    --color-backdrop-2:    oklch(0.78 0.12 260 / 0.05);
+  }
+
+  .theme-mono.mode-dark,
+  .theme-mono {
+    --color-bg:          oklch(0.150 0.003 250);
+    --color-bg-2:        oklch(0.120 0.003 250);
+    --color-surface:     oklch(0.210 0.003 250);
+    --color-surface-2:   oklch(0.240 0.003 250);
+    --color-surface-hi:  oklch(0.280 0.003 250);
+    --color-border:      oklch(0.33  0.003 250);
+    --color-border-soft: oklch(0.27  0.003 250);
+    --color-accent:        oklch(0.88 0.008 250);
+    --color-accent-soft:   oklch(0.88 0.008 250 / 0.16);
+    --color-accent-strong: oklch(0.94 0.005 250);
+    --color-backdrop-1:    oklch(0.88 0.008 250 / 0.05);
+    --color-backdrop-2:    oklch(0.85 0.005 250 / 0.04);
+  }
+
+  .theme-rose.mode-dark,
+  .theme-rose {
+    --color-bg:          oklch(0.155 0.012 15);
+    --color-bg-2:        oklch(0.125 0.012 15);
+    --color-surface:     oklch(0.215 0.012 15);
+    --color-surface-2:   oklch(0.245 0.012 15);
+    --color-surface-hi:  oklch(0.285 0.012 15);
+    --color-border:      oklch(0.33  0.012 15);
+    --color-border-soft: oklch(0.27  0.012 15);
+    --color-accent:        oklch(0.79 0.15 15);
+    --color-accent-soft:   oklch(0.79 0.15 15 / 0.18);
+    --color-accent-strong: oklch(0.85 0.16 15);
+    --color-backdrop-1:    oklch(0.79 0.15 15  / 0.08);
+    --color-backdrop-2:    oklch(0.78 0.13 340 / 0.05);
+  }
+
+  /* ============================================================
+     라이트 모드 — 각 테마별
+     bg 는 밝게, fg 는 어둡게, accent 는 darker shade
+     ============================================================ */
+  .mode-light {
+    color-scheme: light;
+  }
+
+  .theme-forest.mode-light {
+    --color-bg:          oklch(0.985 0.005 60);
+    --color-bg-2:        oklch(0.97  0.005 60);
+    --color-surface:     oklch(0.95  0.005 60);
+    --color-surface-2:   oklch(0.92  0.005 60);
+    --color-surface-hi:  oklch(0.89  0.005 60);
+    --color-border:      oklch(0.82  0.005 60);
+    --color-border-soft: oklch(0.90  0.005 60);
+    --color-fg:    oklch(0.18 0.005 80);
+    --color-fg-2:  oklch(0.32 0.006 80);
+    --color-fg-3:  oklch(0.48 0.006 80);
+    --color-fg-4:  oklch(0.62 0.006 80);
+    --color-accent:        oklch(0.55 0.18 145);
+    --color-accent-soft:   oklch(0.55 0.18 145 / 0.12);
+    --color-accent-strong: oklch(0.42 0.20 145);
+    --color-backdrop-1:    oklch(0.55 0.18 145 / 0.05);
+    --color-backdrop-2:    oklch(0.55 0.15 60  / 0.03);
+  }
+
+  .theme-ocean.mode-light {
+    --color-bg:          oklch(0.985 0.008 235);
+    --color-bg-2:        oklch(0.97  0.008 235);
+    --color-surface:     oklch(0.95  0.008 235);
+    --color-surface-2:   oklch(0.92  0.008 235);
+    --color-surface-hi:  oklch(0.89  0.008 235);
+    --color-border:      oklch(0.82  0.008 235);
+    --color-border-soft: oklch(0.90  0.008 235);
+    --color-fg:    oklch(0.18 0.005 240);
+    --color-fg-2:  oklch(0.32 0.006 240);
+    --color-fg-3:  oklch(0.48 0.006 240);
+    --color-fg-4:  oklch(0.62 0.006 240);
+    --color-accent:        oklch(0.50 0.20 220);
+    --color-accent-soft:   oklch(0.50 0.20 220 / 0.12);
+    --color-accent-strong: oklch(0.38 0.22 220);
+    --color-backdrop-1:    oklch(0.50 0.20 220 / 0.06);
+    --color-backdrop-2:    oklch(0.55 0.14 195 / 0.04);
+  }
+
+  .theme-sunset.mode-light {
+    --color-bg:          oklch(0.985 0.008 40);
+    --color-bg-2:        oklch(0.97  0.008 40);
+    --color-surface:     oklch(0.95  0.008 40);
+    --color-surface-2:   oklch(0.92  0.008 40);
+    --color-surface-hi:  oklch(0.89  0.008 40);
+    --color-border:      oklch(0.82  0.008 40);
+    --color-border-soft: oklch(0.90  0.008 40);
+    --color-fg:    oklch(0.18 0.005 40);
+    --color-fg-2:  oklch(0.32 0.006 40);
+    --color-fg-3:  oklch(0.48 0.006 40);
+    --color-fg-4:  oklch(0.62 0.006 40);
+    --color-accent:        oklch(0.58 0.20 50);
+    --color-accent-soft:   oklch(0.58 0.20 50 / 0.14);
+    --color-accent-strong: oklch(0.46 0.22 50);
+    --color-backdrop-1:    oklch(0.58 0.20 50 / 0.06);
+    --color-backdrop-2:    oklch(0.58 0.17 20 / 0.04);
+  }
+
+  .theme-lavender.mode-light {
+    --color-bg:          oklch(0.985 0.008 295);
+    --color-bg-2:        oklch(0.97  0.008 295);
+    --color-surface:     oklch(0.95  0.008 295);
+    --color-surface-2:   oklch(0.92  0.008 295);
+    --color-surface-hi:  oklch(0.89  0.008 295);
+    --color-border:      oklch(0.82  0.008 295);
+    --color-border-soft: oklch(0.90  0.008 295);
+    --color-fg:    oklch(0.18 0.005 295);
+    --color-fg-2:  oklch(0.32 0.006 295);
+    --color-fg-3:  oklch(0.48 0.006 295);
+    --color-fg-4:  oklch(0.62 0.006 295);
+    --color-accent:        oklch(0.50 0.18 295);
+    --color-accent-soft:   oklch(0.50 0.18 295 / 0.12);
+    --color-accent-strong: oklch(0.40 0.20 295);
+    --color-backdrop-1:    oklch(0.50 0.18 295 / 0.06);
+    --color-backdrop-2:    oklch(0.55 0.15 260 / 0.04);
+  }
+
+  .theme-mono.mode-light {
+    --color-bg:          oklch(0.985 0.002 250);
+    --color-bg-2:        oklch(0.97  0.002 250);
+    --color-surface:     oklch(0.95  0.002 250);
+    --color-surface-2:   oklch(0.92  0.002 250);
+    --color-surface-hi:  oklch(0.89  0.002 250);
+    --color-border:      oklch(0.82  0.002 250);
+    --color-border-soft: oklch(0.90  0.002 250);
+    --color-fg:    oklch(0.18 0.003 250);
+    --color-fg-2:  oklch(0.30 0.003 250);
+    --color-fg-3:  oklch(0.46 0.003 250);
+    --color-fg-4:  oklch(0.60 0.003 250);
+    --color-accent:        oklch(0.28 0.005 250);
+    --color-accent-soft:   oklch(0.28 0.005 250 / 0.10);
+    --color-accent-strong: oklch(0.18 0.003 250);
+    --color-backdrop-1:    oklch(0.28 0.005 250 / 0.04);
+    --color-backdrop-2:    oklch(0.50 0.003 250 / 0.03);
+  }
+
+  .theme-rose.mode-light {
+    --color-bg:          oklch(0.985 0.008 15);
+    --color-bg-2:        oklch(0.97  0.008 15);
+    --color-surface:     oklch(0.95  0.008 15);
+    --color-surface-2:   oklch(0.92  0.008 15);
+    --color-surface-hi:  oklch(0.89  0.008 15);
+    --color-border:      oklch(0.82  0.008 15);
+    --color-border-soft: oklch(0.90  0.008 15);
+    --color-fg:    oklch(0.18 0.005 15);
+    --color-fg-2:  oklch(0.32 0.006 15);
+    --color-fg-3:  oklch(0.48 0.006 15);
+    --color-fg-4:  oklch(0.62 0.006 15);
+    --color-accent:        oklch(0.55 0.20 15);
+    --color-accent-soft:   oklch(0.55 0.20 15 / 0.12);
+    --color-accent-strong: oklch(0.42 0.22 15);
+    --color-backdrop-1:    oklch(0.55 0.20 15  / 0.06);
+    --color-backdrop-2:    oklch(0.55 0.16 340 / 0.04);
+  }
+}
+
+@layer base {
+  :root {
+    color-scheme: dark;
+  }
+
+  html, body { margin: 0; padding: 0; }
+
+  body {
+    background: var(--color-bg);
+    color: var(--color-fg);
+    font-family: var(--font-sans);
+    font-feature-settings: "cv09", "ss01";
+    letter-spacing: -0.005em;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    position: relative;
+    overflow-x: hidden;
+    transition: background-color 200ms ease, color 200ms ease;
+  }
+
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    pointer-events: none;
+    z-index: 0;
+    background:
+      radial-gradient(60% 50% at 12% 4%,  var(--color-backdrop-1), transparent 70%),
+      radial-gradient(50% 40% at 92% 96%, var(--color-backdrop-2), transparent 70%);
+    transition: background 400ms ease;
+  }
+
+  a { color: inherit; text-decoration: none; }
+}
+
+@layer utilities {
+  .scrollbar-thin {
+    scrollbar-width: thin;
+    scrollbar-color: var(--color-border) transparent;
+  }
+  .scrollbar-thin::-webkit-scrollbar { width: 6px; height: 6px; }
+  .scrollbar-thin::-webkit-scrollbar-thumb {
+    background: var(--color-border);
+    border-radius: 999px;
+  }
+  .scrollbar-thin::-webkit-scrollbar-track { background: transparent; }
+}
