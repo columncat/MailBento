@@ -4,6 +4,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { Plus, Trash2, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
+import { IconUpload } from "@/components/icon-upload";
 import {
   autoIconUrl,
   uid,
@@ -185,12 +186,15 @@ function LinkRow({
           placeholder="URL (https://...)"
           className={inputCls + " font-mono text-[11px]"}
         />
-        <input
-          value={link.iconUrl}
-          onChange={(e) => onChange({ iconUrl: e.target.value })}
-          placeholder="아이콘 URL (비우면 favicon 자동)"
-          className={inputCls + " font-mono text-[10.5px]"}
-        />
+        <div className="flex gap-1.5">
+          <input
+            value={link.iconUrl}
+            onChange={(e) => onChange({ iconUrl: e.target.value })}
+            placeholder="아이콘 URL (비우면 favicon 자동) · 또는 업로드"
+            className={inputCls + " min-w-0 flex-1 font-mono text-[10.5px]"}
+          />
+          <IconUpload onPicked={(dataUrl) => onChange({ iconUrl: dataUrl })} />
+        </div>
       </div>
       <button
         type="button"

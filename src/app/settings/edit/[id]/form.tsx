@@ -4,6 +4,7 @@ import { Loader2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
 
+import { IconUpload } from "@/components/icon-upload";
 import { ProviderIcon } from "@/components/provider-icon";
 
 interface Props {
@@ -115,15 +116,18 @@ export function EditAccountForm({
       </Field>
 
       <Field
-        label="아이콘 URL"
-        hint="비워두면 기본 메일 아이콘. 추천: dashboard-icons, favicon.io"
+        label="아이콘 URL / 업로드"
+        hint="비워두면 기본 메일 아이콘. URL 입력 또는 이미지 파일 업로드(자동 축소)."
       >
-        <input
-          value={iconUrl}
-          onChange={(e) => setIconUrl(e.target.value)}
-          placeholder="https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/protonmail.svg"
-          className={`${inputCls} font-mono text-[11.5px]`}
-        />
+        <div className="flex gap-2">
+          <input
+            value={iconUrl}
+            onChange={(e) => setIconUrl(e.target.value)}
+            placeholder="https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/protonmail.svg"
+            className={`${inputCls} min-w-0 flex-1 font-mono text-[11.5px]`}
+          />
+          <IconUpload onPicked={(dataUrl) => setIconUrl(dataUrl)} />
+        </div>
       </Field>
 
       <Field
