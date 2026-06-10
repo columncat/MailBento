@@ -34,19 +34,22 @@ function NaverLogo({ className }: { className?: string }) {
   );
 }
 
-function YoutubeLogo({ className }: { className?: string }) {
+function NamuLogo({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" className={className} aria-hidden>
-      <rect x="1" y="4" width="22" height="16" rx="5" fill="#FF0000" />
-      <path fill="#fff" d="M10 8.5v7l6-3.5z" />
+      <rect width="24" height="24" rx="4" fill="#00A495" />
+      <path
+        fill="#fff"
+        d="M12 3l5 7h-3.2l4.2 6H13v4h-2v-4H6l4.2-6H7z"
+      />
     </svg>
   );
 }
 
 interface SearchEngine {
   key: string;
-  action: string;
-  param: string;
+  /** 검색어 → 이동 URL (나무위키는 path 기반이라 form GET 불가). */
+  buildUrl: (q: string) => string;
   placeholder: string;
   home: string;
   Logo: (p: { className?: string }) => React.ReactElement;
@@ -58,8 +61,7 @@ interface SearchEngine {
 const ENGINES: SearchEngine[] = [
   {
     key: "google",
-    action: "https://www.google.com/search",
-    param: "q",
+    buildUrl: (q) => `https://www.google.com/search?q=${encodeURIComponent(q)}`,
     placeholder: "Google에서 검색…",
     home: "https://www.google.com",
     Logo: GoogleLogo,
@@ -68,8 +70,8 @@ const ENGINES: SearchEngine[] = [
   },
   {
     key: "naver",
-    action: "https://search.naver.com/search.naver",
-    param: "query",
+    buildUrl: (q) =>
+      `https://search.naver.com/search.naver?query=${encodeURIComponent(q)}`,
     placeholder: "네이버에서 검색…",
     home: "https://www.naver.com",
     Logo: NaverLogo,
@@ -77,14 +79,13 @@ const ENGINES: SearchEngine[] = [
     label: "Naver",
   },
   {
-    key: "youtube",
-    action: "https://www.youtube.com/results",
-    param: "search_query",
-    placeholder: "YouTube 동영상 검색…",
-    home: "https://www.youtube.com",
-    Logo: YoutubeLogo,
-    ringCls: "ring-[#ff0000]/40 focus-within:ring-[#ff0000]",
-    label: "YouTube",
+    key: "namu",
+    buildUrl: (q) => `https://namu.wiki/w/${encodeURIComponent(q)}`,
+    placeholder: "나무위키에서 검색…",
+    home: "https://namu.wiki",
+    Logo: NamuLogo,
+    ringCls: "ring-[#00a495]/40 focus-within:ring-[#00a495]",
+    label: "나무위키",
   },
 ];
 
@@ -104,9 +105,13 @@ export function WidgetSearch() {
         {ENGINES.map((e) => (
           <form
             key={e.key}
-            action={e.action}
-            target="_blank"
-            rel="noopener"
+            onSubmit={(ev) => {
+              ev.preventDefault();
+              const q = String(new FormData(ev.currentTarget).get("q") ?? "")
+                .trim();
+              if (!q) return;
+              window.open(e.buildUrl(q), "_blank", "noopener");
+            }}
             className={`flex flex-1 items-center gap-2.5 rounded-lg bg-(--color-bg-2) px-3 ring-1 transition ${e.ringCls}`}
           >
             <a
@@ -122,7 +127,7 @@ export function WidgetSearch() {
             </a>
             <input
               type="text"
-              name={e.param}
+              name="q"
               placeholder={e.placeholder}
               autoComplete="off"
               className="min-w-0 flex-1 bg-transparent text-xs text-(--color-fg) outline-none placeholder:text-(--color-fg-4)"

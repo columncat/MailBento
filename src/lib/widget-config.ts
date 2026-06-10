@@ -73,58 +73,6 @@ export const REGIONS: Region[] = [
   },
 ];
 
-export interface StockDef {
-  id: string;
-  name: string;
-  ticker: string;
-  exchange: string;
-  kind: "kr_index" | "kr_stock" | "fx";
-  decimals: number;
-}
-
-export const STOCKS: StockDef[] = [
-  {
-    id: "KOSPI",
-    name: "KOSPI",
-    ticker: ".KS",
-    exchange: "종합지수",
-    kind: "kr_index",
-    decimals: 2,
-  },
-  {
-    id: "FX_USDKRW",
-    name: "원/달러",
-    ticker: "USD",
-    exchange: "환율",
-    kind: "fx",
-    decimals: 2,
-  },
-  {
-    id: "FX_JPYKRW",
-    name: "원/엔(100)",
-    ticker: "JPY",
-    exchange: "환율",
-    kind: "fx",
-    decimals: 2,
-  },
-  {
-    id: "005930",
-    name: "삼성전자",
-    ticker: "005930",
-    exchange: "KRX",
-    kind: "kr_stock",
-    decimals: 0,
-  },
-  {
-    id: "000660",
-    name: "SK하이닉스",
-    ticker: "000660",
-    exchange: "KRX",
-    kind: "kr_stock",
-    decimals: 0,
-  },
-];
-
 /** wttr.in weather code → emoji */
 export function wttrEmoji(code: string | number, isDay: boolean): string {
   const c = typeof code === "string" ? parseInt(code, 10) : code;
@@ -149,9 +97,4 @@ export function wttrEmoji(code: string | number, isDay: boolean): string {
     return "🌨";
   if ([200, 386, 389, 392, 395].includes(c)) return "⛈";
   return "·";
-}
-
-/** 외부 API 가 CORS 막혀있는 경우용 프록시 (Naver finance 등). */
-export function proxied(url: string): string {
-  return `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`;
 }

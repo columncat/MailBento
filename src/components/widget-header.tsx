@@ -4,7 +4,7 @@ import { REGIONS } from "@/lib/widget-config";
 
 import { WidgetClock } from "./widget-clock";
 import { WidgetSearch } from "./widget-search";
-import { WidgetWatchlist } from "./widget-watchlist";
+import { WidgetTranslate } from "./widget-translate";
 
 export function WidgetHeader() {
   return (
@@ -31,7 +31,7 @@ export function WidgetHeader() {
           <WidgetSearch />
         </div>
         <div className="border-t border-(--color-border-soft) lg:border-t-0 lg:border-l">
-          <WidgetWatchlist />
+          <WidgetTranslate />
         </div>
       </div>
     </section>
