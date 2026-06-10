@@ -36,13 +36,8 @@ function NaverLogo({ className }: { className?: string }) {
 
 function NamuLogo({ className }: { className?: string }) {
   return (
-    <svg viewBox="0 0 24 24" className={className} aria-hidden>
-      <rect width="24" height="24" rx="4" fill="#00A495" />
-      <path
-        fill="#fff"
-        d="M12 3l5 7h-3.2l4.2 6H13v4h-2v-4H6l4.2-6H7z"
-      />
-    </svg>
+    // eslint-disable-next-line @next/next/no-img-element
+    <img src="/namu.svg" alt="" aria-hidden className={className} />
   );
 }
 

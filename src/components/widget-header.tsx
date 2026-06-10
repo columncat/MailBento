@@ -20,7 +20,7 @@ export function WidgetHeader() {
         }}
       />
 
-      <div className="grid divide-y divide-(--color-border-soft) lg:grid-cols-[minmax(0,2fr)_minmax(0,1.4fr)_minmax(0,1.5fr)] lg:divide-x lg:divide-y-0">
+      <div className="grid divide-y divide-(--color-border-soft) lg:min-h-[240px] lg:grid-cols-[minmax(0,2fr)_minmax(0,1.4fr)_minmax(0,1.5fr)] lg:divide-x lg:divide-y-0">
         {/* KR · US 시계 묶음 */}
         <div className="grid grid-cols-2 divide-x divide-(--color-border-soft)">
           {REGIONS.map((r) => (

@@ -33,7 +33,7 @@ export function WidgetTranslate() {
           e.preventDefault();
           openTranslate(text);
         }}
-        className="flex min-h-0 flex-1 flex-col gap-2.5"
+        className="relative min-h-0 flex-1"
       >
         <textarea
           value={text}
@@ -45,16 +45,17 @@ export function WidgetTranslate() {
               openTranslate(text);
             }
           }}
-          placeholder="영어 문장 입력… (Enter 번역 · Shift+Enter 줄바꿈)"
+          placeholder="여기에 입력..."
           autoComplete="off"
-          className="min-h-0 flex-1 resize-none overflow-y-auto rounded-lg bg-(--color-bg-2) p-3 text-xs leading-relaxed text-(--color-fg) ring-1 ring-(--color-border-soft) outline-none transition placeholder:text-(--color-fg-4) focus:ring-(--color-accent)"
+          className="h-full w-full resize-none overflow-y-auto rounded-lg bg-(--color-bg-2) p-3 pr-8 text-xs leading-relaxed text-(--color-fg) ring-1 ring-(--color-border-soft) outline-none transition placeholder:text-(--color-fg-4) focus:ring-(--color-accent)"
         />
         <button
           type="submit"
-          className="flex h-8 shrink-0 items-center justify-center gap-1.5 rounded-lg bg-(--color-bg-2) font-mono text-[11px] tracking-wider text-(--color-fg-2) ring-1 ring-(--color-border-soft) transition hover:bg-(--color-surface-hi) hover:text-(--color-fg)"
+          tabIndex={-1}
+          aria-label="번역"
+          className="absolute right-2.5 bottom-2.5 text-(--color-fg-4) hover:text-(--color-fg-2)"
         >
           <CornerDownLeft className="h-3 w-3" />
-          TRANSLATE
         </button>
       </form>
     </div>
