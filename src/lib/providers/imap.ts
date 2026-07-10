@@ -322,6 +322,84 @@ function basicCredsFromAccount(account: Account): ImapConnectOptions {
   };
 }
 
+/** 같은 자격증명(host+port+user+pass) 이면 하나의 계정으로 묶는 키. */
+function credKey(a: Account): string {
+  return [a.imapHost, a.imapPort, a.imapUsername, a.imapPasswordEnc].join("|");
+}
+
+export interface AccountFetch {
+  messages: MailMessage[];
+  unreadCount: number | null;
+  error: string | null;
+}
+
+/**
+ * 여러 계정/뷰를 가져오되, **같은 IMAP 자격증명은 연결 1개를 공유**해서
+ * 그 안에서 뷰별로 순차 조회한다. (같은 메일함의 여러 "뷰"가 각각 연결을
+ * 열어 서버 동시 연결 제한에 걸려 "connection in required time" 나던 문제 해결.)
+ */
+export async function fetchInboxesGrouped(
+  accounts: Account[],
+  perBox: number,
+): Promise<Map<number, AccountFetch>> {
+  const groups = new Map<string, Account[]>();
+  for (const a of accounts) {
+    const key = credKey(a);
+    const g = groups.get(key);
+    if (g) g.push(a);
+    else groups.set(key, [a]);
+  }
+
+  const out = new Map<number, AccountFetch>();
+
+  await Promise.all(
+    [...groups.values()].map(async (group) => {
+      let creds: ImapConnectOptions;
+      try {
+        creds = basicCredsFromAccount(group[0]);
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : "IMAP 설정 오류";
+        for (const a of group)
+          out.set(a.id, { messages: [], unreadCount: null, error: msg });
+        return;
+      }
+
+      try {
+        await withImapConnection(creds, async (client) => {
+          for (const a of group) {
+            try {
+              const messages = await fetchInboxFromClient(
+                client,
+                perBox,
+                a.query,
+              );
+              let uc = await fetchUnreadCountFromClient(client, a.query).catch(
+                () => null,
+              );
+              if (uc === null) uc = messages.filter((m) => m.unread).length;
+              out.set(a.id, { messages, unreadCount: uc, error: null });
+            } catch (err) {
+              out.set(a.id, {
+                messages: [],
+                unreadCount: null,
+                error: err instanceof Error ? err.message : "가져오기 실패",
+              });
+            }
+          }
+        });
+      } catch (err) {
+        // 연결 자체 실패 → 그룹 전체 에러 (아직 안 채워진 뷰만)
+        const msg = err instanceof Error ? err.message : "연결 실패";
+        for (const a of group)
+          if (!out.has(a.id))
+            out.set(a.id, { messages: [], unreadCount: null, error: msg });
+      }
+    }),
+  );
+
+  return out;
+}
+
 export const imapProvider: MailProvider = {
   async fetchInbox(account: Account, limit: number): Promise<MailMessage[]> {
     return withImapConnection(basicCredsFromAccount(account), (c) =>
