@@ -25,6 +25,10 @@ function makeClient(opts: ImapConnectOptions): ImapFlow {
     secure: opts.port === 993,
     auth: { user: opts.user, pass: opts.pass },
     logger: false,
+    // 무한 hang 방지 — 하나의 계정이 전체 /api/mail 을 막지 않도록
+    connectionTimeout: 15000, // TCP+TLS 연결
+    greetingTimeout: 10000, // 서버 인사
+    socketTimeout: 30000, // 유휴 소켓
   });
 }
 
