@@ -81,6 +81,12 @@ export const appConfig = sqliteTable("app_config", {
   id: integer("id").primaryKey(),
   /** 메일 서버 캐시 TTL(초). 0 = 캐시 없음. */
   mailCacheSeconds: integer("mail_cache_seconds").notNull().default(60),
+  /** 대시보드 자동 새로고침 주기(초). */
+  refreshIntervalSeconds: integer("refresh_interval_seconds")
+    .notNull()
+    .default(180),
+  /** 1 = interval 도달 시 캐시 무시(force)하고 항상 새로 fetch. */
+  forceOnInterval: integer("force_on_interval").notNull().default(0),
   updatedAt: integer("updated_at", { mode: "timestamp" })
     .notNull()
     .default(sql`(unixepoch())`),

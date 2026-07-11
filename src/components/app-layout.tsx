@@ -14,6 +14,7 @@ interface Props {
   initialAccounts: AccountSummary[];
   initialWidgetState: WidgetState;
   refreshIntervalSeconds: number;
+  forceOnInterval: boolean;
   authEnabled: boolean;
 }
 

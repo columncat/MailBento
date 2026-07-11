@@ -1,6 +1,6 @@
 "use client";
 
-import { ExternalLink, Pin, Trash2 } from "lucide-react";
+import { Pencil, Pin, Trash2 } from "lucide-react";
 import { useState } from "react";
 
 import {
@@ -17,6 +17,22 @@ interface Props {
 
 export function WidgetCorkboard({ pins, onChange }: Props) {
   const [input, setInput] = useState("");
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draftTitle, setDraftTitle] = useState("");
+
+  const startEdit = (pin: PinType) => {
+    setEditingId(pin.id);
+    setDraftTitle(pin.title || hostnameOf(pin.url));
+  };
+
+  const saveTitle = () => {
+    if (!editingId) return;
+    const title = draftTitle.trim();
+    onChange(
+      pins.map((p) => (p.id === editingId ? { ...p, title } : p)),
+    );
+    setEditingId(null);
+  };
 
   const addPin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -94,22 +110,50 @@ export function WidgetCorkboard({ pins, onChange }: Props) {
                   e.currentTarget.style.visibility = "hidden";
                 }}
               />
-              <a
-                href={pin.url}
-                target="_blank"
-                rel="noreferrer"
-                className="flex min-w-0 flex-1 items-center justify-between gap-2"
-              >
-                <div className="min-w-0">
-                  <div className="truncate text-sm text-(--color-fg)">
-                    {hostnameOf(pin.url)}
-                  </div>
-                  <div className="truncate font-mono text-[11px] text-(--color-fg-4)">
+              {editingId === pin.id ? (
+                <div className="min-w-0 flex-1">
+                  <input
+                    autoFocus
+                    value={draftTitle}
+                    onChange={(e) => setDraftTitle(e.target.value)}
+                    onBlur={saveTitle}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") saveTitle();
+                      if (e.key === "Escape") setEditingId(null);
+                    }}
+                    placeholder={hostnameOf(pin.url)}
+                    className="w-full rounded-md bg-(--color-surface) px-2 py-1 text-sm text-(--color-fg) ring-1 ring-(--color-accent)/60 outline-none"
+                  />
+                  <div className="mt-0.5 truncate font-mono text-[11px] text-(--color-fg-4)">
                     {pin.url}
                   </div>
                 </div>
-                <ExternalLink className="h-3.5 w-3.5 shrink-0 text-(--color-fg-4) opacity-0 group-hover:opacity-100" />
-              </a>
+              ) : (
+                <a
+                  href={pin.url}
+                  target="_blank"
+                  rel="noreferrer"
+                  className="flex min-w-0 flex-1 items-center justify-between gap-2"
+                >
+                  <div className="min-w-0">
+                    <div className="truncate text-sm text-(--color-fg)">
+                      {pin.title || hostnameOf(pin.url)}
+                    </div>
+                    <div className="truncate font-mono text-[11px] text-(--color-fg-4)">
+                      {pin.url}
+                    </div>
+                  </div>
+                </a>
+              )}
+              <button
+                type="button"
+                onClick={() => startEdit(pin)}
+                className="grid h-6 w-6 shrink-0 place-items-center rounded-md text-(--color-fg-4) opacity-0 transition group-hover:opacity-100 hover:bg-(--color-surface-hi) hover:text-(--color-fg-2)"
+                aria-label="제목 편집"
+                title="제목 편집"
+              >
+                <Pencil className="h-3 w-3" />
+              </button>
               <button
                 type="button"
                 onClick={() => removePin(pin.id)}

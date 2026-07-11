@@ -1,13 +1,14 @@
 import { AppLayout } from "@/components/app-layout";
+import { getAppConfig } from "@/lib/app-config";
 import { isAuthEnabled } from "@/lib/auth";
 import { db, schema } from "@/lib/db";
-import { env } from "@/lib/env";
 import { getWidgetState } from "@/lib/widget-server";
 
 export const dynamic = "force-dynamic";
 
 export default async function HomePage() {
   const widgetState = getWidgetState();
+  const appConfig = getAppConfig();
   const accounts = await db
     .select({
       id: schema.accounts.id,
@@ -26,7 +27,8 @@ export default async function HomePage() {
     <AppLayout
       initialAccounts={accounts}
       initialWidgetState={widgetState}
-      refreshIntervalSeconds={env.REFRESH_INTERVAL_SECONDS}
+      refreshIntervalSeconds={appConfig.refreshIntervalSeconds}
+      forceOnInterval={appConfig.forceOnInterval}
       authEnabled={isAuthEnabled()}
     />
   );

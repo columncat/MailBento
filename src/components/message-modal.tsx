@@ -71,9 +71,16 @@ export function MessageModal({
   return (
     <Dialog.Root open={open} onOpenChange={(o) => !o && onClose()}>
       <Dialog.Portal>
-        <Dialog.Overlay className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm data-[state=open]:animate-in data-[state=open]:fade-in-0" />
+        {/* pointerdown 전파 차단 — React 포털 이벤트가 컴포넌트 트리로 버블되어
+            뒤쪽 dnd-kit 정렬 센서를 활성화(드래그 시 박스 순서 변경)하던 버그 방지.
+            Radix 자체 핸들러(overlay 클릭 닫기)는 같은 요소라 그대로 동작. */}
+        <Dialog.Overlay
+          onPointerDown={(e) => e.stopPropagation()}
+          className="fixed inset-0 z-50 bg-black/70 backdrop-blur-sm data-[state=open]:animate-in data-[state=open]:fade-in-0"
+        />
         <Dialog.Content
           aria-describedby={undefined}
+          onPointerDown={(e) => e.stopPropagation()}
           className="fixed top-1/2 left-1/2 z-50 flex max-h-[88vh] w-[min(960px,94vw)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-[var(--radius-card)] bg-(--color-surface) ring-1 ring-(--color-border) shadow-2xl data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95"
         >
           {/* 헤더 */}

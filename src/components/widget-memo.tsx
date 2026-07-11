@@ -45,12 +45,20 @@ export function WidgetMemo({ memos, onChange }: Props) {
       </header>
 
       <form onSubmit={addMemo} className="mb-3 flex shrink-0 gap-2">
-        <input
+        <textarea
           value={input}
           onChange={(e) => setInput(e.target.value)}
-          placeholder="메모 입력 후 Enter"
-          maxLength={300}
-          className="flex-1 rounded-lg bg-(--color-bg-2) px-3 py-2 text-sm text-(--color-fg) ring-1 ring-(--color-border-soft) outline-none placeholder:text-(--color-fg-4) focus:ring-(--color-accent)/60"
+          onKeyDown={(e) => {
+            // Enter = 추가, Shift/Alt+Enter = 개행 (붙여넣은 개행도 유지됨)
+            if (e.key === "Enter" && !e.shiftKey && !e.altKey) {
+              e.preventDefault();
+              e.currentTarget.form?.requestSubmit();
+            }
+          }}
+          placeholder="메모 입력 후 Enter (Shift+Enter 개행)"
+          maxLength={1000}
+          rows={2}
+          className="scrollbar-thin flex-1 resize-none rounded-lg bg-(--color-bg-2) px-3 py-2 text-sm leading-relaxed text-(--color-fg) ring-1 ring-(--color-border-soft) outline-none placeholder:text-(--color-fg-4) focus:ring-(--color-accent)/60"
         />
         <button
           type="submit"

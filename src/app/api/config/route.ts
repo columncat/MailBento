@@ -12,6 +12,8 @@ export async function GET() {
 
 const bodySchema = z.object({
   mailCacheSeconds: z.number().int().min(0).max(3600).optional(),
+  refreshIntervalSeconds: z.number().int().min(15).max(3600).optional(),
+  forceOnInterval: z.boolean().optional(),
 });
 
 export async function PUT(req: Request) {

@@ -7,7 +7,7 @@ import { isAuthEnabled } from "@/lib/auth";
 import { db, schema } from "@/lib/db";
 
 import { AccountActions } from "./account-actions";
-import { MailCacheSetting } from "./mail-cache-setting";
+import { MailFetchSettings } from "./mail-cache-setting";
 import { PreferencesPanel } from "./preferences-panel";
 import { SettingsIO } from "./settings-io";
 
@@ -137,8 +137,8 @@ export default async function SettingsPage({
         )}
       </section>
 
-      {/* 메일 캐시 */}
-      <MailCacheSetting initial={appConfig.mailCacheSeconds} />
+      {/* 메일 가져오기 (캐시/주기/강제) */}
+      <MailFetchSettings initial={appConfig} />
 
       {/* 표시 설정 */}
       <PreferencesPanel />

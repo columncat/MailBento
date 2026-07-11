@@ -72,12 +72,14 @@ export function Dashboard({
   initialAccounts,
   initialWidgetState,
   refreshIntervalSeconds,
+  forceOnInterval,
   widgetEnabled,
   onWidgetToggle,
 }: {
   initialAccounts: AccountSummary[];
   initialWidgetState: WidgetState;
   refreshIntervalSeconds: number;
+  forceOnInterval: boolean;
   widgetEnabled: boolean;
   onWidgetToggle: (v: boolean) => void;
 }) {
@@ -209,7 +211,8 @@ export function Dashboard({
   };
 
   // ─ 메일 fetch ─
-  const fetchInboxes = useCallback(async (showSpinner: boolean) => {
+  const fetchInboxes = useCallback(
+    async (showSpinner: boolean, force = showSpinner) => {
     abortRef.current?.abort();
     const ac = new AbortController();
     abortRef.current = ac;
@@ -220,8 +223,9 @@ export function Dashboard({
     );
 
     try {
-      // 수동 새로고침(showSpinner)은 서버 캐시 무시(force), 자동 주기는 캐시 사용
-      const res = await fetch(showSpinner ? "/api/mail?force=1" : "/api/mail", {
+      // force = 서버 캐시 무시. 수동 새로고침은 항상 force,
+      // interval 은 forceOnInterval 설정에 따름, 첫 로드는 캐시 허용.
+      const res = await fetch(force ? "/api/mail?force=1" : "/api/mail", {
         cache: "no-store",
         signal: ac.signal,
       });
@@ -253,20 +257,28 @@ export function Dashboard({
     } finally {
       setRefreshing(false);
     }
-  }, []);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (initialAccounts.length === 0) return;
-    fetchInboxes(false);
+    // 첫 로드: 캐시 허용 (TTL 이내면 서버가 IMAP 재조회 없이 응답)
+    fetchInboxes(false, false);
     const id = setInterval(
-      () => fetchInboxes(false),
+      () => fetchInboxes(false, forceOnInterval),
       refreshIntervalSeconds * 1000,
     );
     return () => {
       clearInterval(id);
       abortRef.current?.abort();
     };
-  }, [fetchInboxes, refreshIntervalSeconds, initialAccounts.length]);
+  }, [
+    fetchInboxes,
+    refreshIntervalSeconds,
+    forceOnInterval,
+    initialAccounts.length,
+  ]);
 
   // ─ DnD ─
   const sensors = useSensors(
