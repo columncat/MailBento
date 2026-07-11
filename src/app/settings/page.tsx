@@ -2,10 +2,12 @@ import { ArrowLeft, Clock, LogOut, Mail, Plus } from "lucide-react";
 import Link from "next/link";
 
 import { ProviderIcon } from "@/components/provider-icon";
+import { getAppConfig } from "@/lib/app-config";
 import { isAuthEnabled } from "@/lib/auth";
 import { db, schema } from "@/lib/db";
 
 import { AccountActions } from "./account-actions";
+import { MailCacheSetting } from "./mail-cache-setting";
 import { PreferencesPanel } from "./preferences-panel";
 import { SettingsIO } from "./settings-io";
 
@@ -18,6 +20,7 @@ export default async function SettingsPage({
 }) {
   const { auth_error } = await searchParams;
   const authEnabled = isAuthEnabled();
+  const appConfig = getAppConfig();
 
   const accounts = await db
     .select()
@@ -133,6 +136,9 @@ export default async function SettingsPage({
           </ul>
         )}
       </section>
+
+      {/* 메일 캐시 */}
+      <MailCacheSetting initial={appConfig.mailCacheSeconds} />
 
       {/* 표시 설정 */}
       <PreferencesPanel />

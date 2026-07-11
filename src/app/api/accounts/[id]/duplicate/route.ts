@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { NextResponse, type NextRequest } from "next/server";
 
 import { db, schema } from "@/lib/db";
+import { invalidateMailCache } from "@/lib/mail-cache";
 
 /**
  * 계정을 복제. OAuth 자격증명 (token / IMAP 비밀번호) 그대로 복사 →
@@ -52,5 +53,6 @@ export async function POST(
     .returning({ id: schema.accounts.id })
     .all();
 
+  invalidateMailCache();
   return NextResponse.json({ id: result[0].id });
 }

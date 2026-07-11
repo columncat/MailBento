@@ -1,13 +1,24 @@
 import { NextResponse } from "next/server";
 
+import { getAppConfig } from "@/lib/app-config";
 import { db, schema } from "@/lib/db";
 import { env } from "@/lib/env";
+import { getMailCache, setMailCache } from "@/lib/mail-cache";
 import { fetchInboxesGrouped } from "@/lib/providers/imap";
 import type { InboxFetchResult } from "@/lib/providers/types";
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(req: Request) {
+  const force = new URL(req.url).searchParams.get("force") === "1";
+  const ttlMs = getAppConfig().mailCacheSeconds * 1000;
+
+  // TTL 안이고 강제 아님 → 캐시 반환 (IMAP 재조회 없음)
+  const cache = getMailCache();
+  if (!force && ttlMs > 0 && cache && Date.now() - cache.fetchedAt < ttlMs) {
+    return NextResponse.json({ ...cache, cached: true });
+  }
+
   const accounts = await db
     .select()
     .from(schema.accounts)
@@ -44,5 +55,7 @@ export async function GET() {
     };
   });
 
-  return NextResponse.json({ inboxes, fetchedAt: Date.now() });
+  const payload = { inboxes, fetchedAt: Date.now() };
+  setMailCache(payload);
+  return NextResponse.json(payload);
 }

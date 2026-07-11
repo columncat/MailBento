@@ -3,6 +3,7 @@ import { z } from "zod";
 
 import { encrypt } from "@/lib/crypto";
 import { db, schema } from "@/lib/db";
+import { invalidateMailCache } from "@/lib/mail-cache";
 import { setWidgetState } from "@/lib/widget-server";
 
 export const dynamic = "force-dynamic";
@@ -66,6 +67,7 @@ export async function PUT(req: Request) {
     setWidgetState(parsed.widget as Parameters<typeof setWidgetState>[0]);
   }
 
+  invalidateMailCache();
   return NextResponse.json({
     ok: true,
     accounts: parsed.accounts?.length ?? 0,

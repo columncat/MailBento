@@ -75,3 +75,15 @@ export const widgetState = sqliteTable("widget_state", {
 });
 
 export type WidgetStateRow = typeof widgetState.$inferSelect;
+
+/** 앱 전역 설정 — 단일 행(id=1). 서버 사이드에서 읽는 값. */
+export const appConfig = sqliteTable("app_config", {
+  id: integer("id").primaryKey(),
+  /** 메일 서버 캐시 TTL(초). 0 = 캐시 없음. */
+  mailCacheSeconds: integer("mail_cache_seconds").notNull().default(60),
+  updatedAt: integer("updated_at", { mode: "timestamp" })
+    .notNull()
+    .default(sql`(unixepoch())`),
+});
+
+export type AppConfigRow = typeof appConfig.$inferSelect;

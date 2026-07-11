@@ -3,6 +3,7 @@ import { NextResponse, type NextRequest } from "next/server";
 import { z } from "zod";
 
 import { db, schema } from "@/lib/db";
+import { invalidateMailCache } from "@/lib/mail-cache";
 
 export async function GET() {
   const rows = await db
@@ -76,6 +77,7 @@ export async function PATCH(req: NextRequest) {
     .where(eq(schema.accounts.id, id))
     .run();
 
+  invalidateMailCache();
   return NextResponse.json({ ok: true });
 }
 
@@ -91,5 +93,6 @@ export async function DELETE(req: NextRequest) {
   }
 
   await db.delete(schema.accounts).where(eq(schema.accounts.id, id)).run();
+  invalidateMailCache();
   return NextResponse.json({ ok: true });
 }

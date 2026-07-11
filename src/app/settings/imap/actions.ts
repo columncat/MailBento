@@ -5,6 +5,7 @@ import { z } from "zod";
 
 import { encrypt } from "@/lib/crypto";
 import { db, schema } from "@/lib/db";
+import { invalidateMailCache } from "@/lib/mail-cache";
 import { testImapConnection } from "@/lib/providers/imap";
 
 const formSchema = z.object({
@@ -60,5 +61,6 @@ export async function saveImapAccount(
     })
     .run();
 
+  invalidateMailCache();
   redirect("/");
 }

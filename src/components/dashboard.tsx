@@ -220,7 +220,8 @@ export function Dashboard({
     );
 
     try {
-      const res = await fetch("/api/mail", {
+      // 수동 새로고침(showSpinner)은 서버 캐시 무시(force), 자동 주기는 캐시 사용
+      const res = await fetch(showSpinner ? "/api/mail?force=1" : "/api/mail", {
         cache: "no-store",
         signal: ac.signal,
       });
