@@ -1,5 +1,10 @@
 import { sql } from "drizzle-orm";
-import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
+import {
+  integer,
+  sqliteTable,
+  text,
+  uniqueIndex,
+} from "drizzle-orm/sqlite-core";
 
 // IMAP 단일 provider (앱 비밀번호 기반). OAuth 계열은 모두 제거됨.
 export const PROVIDERS = ["imap"] as const;
@@ -93,3 +98,45 @@ export const appConfig = sqliteTable("app_config", {
 });
 
 export type AppConfigRow = typeof appConfig.$inferSelect;
+
+/**
+ * 메일에 붙이는 앱 내부 표식.
+ * IMAP 서버의 \Seen / \Flagged 를 건드리지 않고 MailBento 안에서만 관리한다
+ * (메일함 상태를 바꾸지 않으므로 다른 클라이언트에 영향 없음).
+ */
+export const MESSAGE_MARKS = [
+  "star",
+  "circle",
+  "triangle",
+  "cross",
+  "exclaim",
+  "check",
+] as const;
+export type MessageMark = (typeof MESSAGE_MARKS)[number];
+
+export const messageFlags = sqliteTable(
+  "message_flags",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+    accountId: integer("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    /** provider 고유 메시지 ID (IMAP UID 등). */
+    messageId: text("message_id").notNull(),
+    /** 1 = 앱에서 읽음 처리됨. 서버의 \Seen 과는 별개. */
+    read: integer("read").notNull().default(0),
+    /** 표식 (없으면 null). */
+    mark: text("mark", { enum: MESSAGE_MARKS }),
+    updatedAt: integer("updated_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+  },
+  (t) => ({
+    uniq: uniqueIndex("message_flags_account_message_idx").on(
+      t.accountId,
+      t.messageId,
+    ),
+  }),
+);
+
+export type MessageFlagRow = typeof messageFlags.$inferSelect;

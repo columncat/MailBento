@@ -2,6 +2,7 @@ import { AppLayout } from "@/components/app-layout";
 import { getAppConfig } from "@/lib/app-config";
 import { isAuthEnabled } from "@/lib/auth";
 import { db, schema } from "@/lib/db";
+import { env } from "@/lib/env";
 import { getWidgetState } from "@/lib/widget-server";
 
 export const dynamic = "force-dynamic";
@@ -30,6 +31,7 @@ export default async function HomePage() {
       refreshIntervalSeconds={appConfig.refreshIntervalSeconds}
       forceOnInterval={appConfig.forceOnInterval}
       authEnabled={isAuthEnabled()}
+      memobentoUrl={env.MEMOBENTO_URL?.trim() || null}
     />
   );
 }

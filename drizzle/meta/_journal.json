@@ -57,6 +57,13 @@
       "when": 1783764072060,
       "tag": "0007_sturdy_rafael_vega",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1784991522638,
+      "tag": "0008_fresh_penance",
+      "breakpoints": true
     }
   ]
 }

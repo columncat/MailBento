@@ -16,6 +16,8 @@ interface Props {
   refreshIntervalSeconds: number;
   forceOnInterval: boolean;
   authEnabled: boolean;
+  /** MEMOBENTO_URL override. null 이면 현재 호스트의 3001 포트로 유추. */
+  memobentoUrl: string | null;
 }
 
 export function AppLayout(props: Props) {

@@ -1,11 +1,13 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
-import { AlertCircle, Loader2, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { AlertCircle, Loader2, MailOpen, X } from "lucide-react";
+import { useCallback, useEffect, useState } from "react";
 
+import type { MessageMark } from "@/lib/db/schema";
 import type { MailMessageDetail } from "@/lib/providers/types";
 
+import { MarkPicker } from "./message-mark";
 import { ProviderIcon } from "./provider-icon";
 
 interface Props {
@@ -13,6 +15,13 @@ interface Props {
   accountDisplayName: string;
   messageId: string | null;
   onClose: () => void;
+  /** 읽음/표식이 바뀌면 목록을 다시 읽도록 알린다. */
+  onFlagsChanged?: () => void;
+}
+
+interface Flag {
+  read: boolean;
+  mark: MessageMark | null;
 }
 
 export function MessageModal({
@@ -20,15 +29,37 @@ export function MessageModal({
   accountDisplayName,
   messageId,
   onClose,
+  onFlagsChanged,
 }: Props) {
   const [detail, setDetail] = useState<MailMessageDetail | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [flag, setFlagState] = useState<Flag>({ read: false, mark: null });
+
+  /** 표식 갱신 — 낙관적으로 반영하고 서버에 기록. */
+  const patchFlag = useCallback(
+    async (patch: Partial<Flag>) => {
+      if (!messageId) return;
+      setFlagState((prev) => ({ ...prev, ...patch }));
+      try {
+        await fetch(`/api/mail/${accountId}/${encodeURIComponent(messageId)}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(patch),
+        });
+        onFlagsChanged?.();
+      } catch {
+        /* 네트워크 오류 — 다음 새로고침에서 반영 */
+      }
+    },
+    [accountId, messageId, onFlagsChanged],
+  );
 
   useEffect(() => {
     if (!messageId) {
       setDetail(null);
       setError(null);
+      setFlagState({ read: false, mark: null });
       return;
     }
     const ac = new AbortController();
@@ -45,8 +76,11 @@ export function MessageModal({
         if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
         return json;
       })
-      .then((json: { message: MailMessageDetail }) => {
+      .then((json: { message: MailMessageDetail; flag?: Flag }) => {
         setDetail(json.message);
+        // 서버가 열람 시점에 읽음 처리하고 현재 표식을 함께 준다
+        setFlagState(json.flag ?? { read: true, mark: null });
+        onFlagsChanged?.();
       })
       .catch((err) => {
         if ((err as Error).name === "AbortError") return;
@@ -55,7 +89,8 @@ export function MessageModal({
       .finally(() => setLoading(false));
 
     return () => ac.abort();
-  }, [accountId, messageId]);
+    // onFlagsChanged 는 상위에서 useCallback 으로 고정 — 넣어도 재실행되지 않음
+  }, [accountId, messageId, onFlagsChanged]);
 
   const open = !!messageId;
   const dateStr = detail
@@ -103,9 +138,30 @@ export function MessageModal({
                 </div>
               </div>
             </div>
-            <Dialog.Close className="grid h-8 w-8 shrink-0 place-items-center rounded-md text-(--color-fg-3) hover:bg-(--color-surface-hi) hover:text-(--color-fg)">
-              <X className="h-4 w-4" />
-            </Dialog.Close>
+            <div className="flex shrink-0 items-center gap-1.5">
+              {/* 표식 — 서버 \Flagged 가 아니라 MailBento 안에서만 쓰는 마크 */}
+              <MarkPicker
+                current={flag.mark}
+                onPick={(mark) => void patchFlag({ mark })}
+                triggerClassName="h-8 w-8 ring-1 ring-(--color-border-soft) bg-(--color-bg-2)"
+              />
+              <button
+                type="button"
+                onClick={() => void patchFlag({ read: !flag.read })}
+                title={
+                  flag.read
+                    ? "안읽음으로 되돌리기"
+                    : "읽음으로 표시"
+                }
+                className="flex items-center gap-1.5 rounded-md bg-(--color-bg-2) px-2.5 py-1.5 text-[11px] text-(--color-fg-3) ring-1 ring-(--color-border-soft) transition hover:bg-(--color-surface-hi) hover:text-(--color-fg-2)"
+              >
+                <MailOpen className="h-3.5 w-3.5" />
+                {flag.read ? "안읽음으로" : "읽음으로"}
+              </button>
+              <Dialog.Close className="grid h-8 w-8 place-items-center rounded-md text-(--color-fg-3) hover:bg-(--color-surface-hi) hover:text-(--color-fg)">
+                <X className="h-4 w-4" />
+              </Dialog.Close>
+            </div>
           </div>
 
           {/* 메타데이터 */}

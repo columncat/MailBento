@@ -3,22 +3,20 @@ import { NextResponse } from "next/server";
 import { getAppConfig } from "@/lib/app-config";
 import { db, schema } from "@/lib/db";
 import { env } from "@/lib/env";
-import { getMailCache, setMailCache } from "@/lib/mail-cache";
+import {
+  getMailCache,
+  refreshMailCache,
+  revalidateInBackground,
+  type MailPayload,
+} from "@/lib/mail-cache";
+import { loadFlags } from "@/lib/message-flags";
 import { fetchInboxesGrouped } from "@/lib/providers/imap";
 import type { InboxFetchResult } from "@/lib/providers/types";
 
 export const dynamic = "force-dynamic";
 
-export async function GET(req: Request) {
-  const force = new URL(req.url).searchParams.get("force") === "1";
-  const ttlMs = getAppConfig().mailCacheSeconds * 1000;
-
-  // TTL 안이고 강제 아님 → 캐시 반환 (IMAP 재조회 없음)
-  const cache = getMailCache();
-  if (!force && ttlMs > 0 && cache && Date.now() - cache.fetchedAt < ttlMs) {
-    return NextResponse.json({ ...cache, cached: true });
-  }
-
+/** IMAP 조회 → 캐시에 넣을 원본 payload (표식은 여기서 섞지 않는다). */
+async function fetchFresh(): Promise<MailPayload> {
   const accounts = await db
     .select()
     .from(schema.accounts)
@@ -55,7 +53,52 @@ export async function GET(req: Request) {
     };
   });
 
-  const payload = { inboxes, fetchedAt: Date.now() };
-  setMailCache(payload);
-  return NextResponse.json(payload);
+  return { inboxes, fetchedAt: Date.now() };
+}
+
+/**
+ * 캐시된 원본에 앱 내부 표식(읽음/마크)을 덮어씌운다.
+ * 표식은 DB 라서 **캐시를 무효화하지 않아도** 즉시 반영된다.
+ */
+function withFlags(payload: MailPayload): MailPayload {
+  const flags = loadFlags(payload.inboxes.map((i) => i.account.id));
+  if (flags.size === 0) return payload;
+
+  const inboxes = payload.inboxes.map((inbox) => {
+    let readLocally = 0;
+    const messages = inbox.messages.map((m) => {
+      const f = flags.get(`${inbox.account.id}:${m.id}`);
+      if (!f) return m;
+      if (m.unread && f.read) readLocally++;
+      return { ...m, unread: m.unread && !f.read, mark: f.mark };
+    });
+    // 서버 기준 안읽음 수에서 앱에서 읽음 처리한 만큼 뺀다 (음수 방지)
+    const unreadCount =
+      inbox.unreadCount == null
+        ? inbox.unreadCount
+        : Math.max(0, inbox.unreadCount - readLocally);
+    return { ...inbox, messages, unreadCount };
+  });
+
+  return { ...payload, inboxes };
+}
+
+export async function GET(req: Request) {
+  const force = new URL(req.url).searchParams.get("force") === "1";
+  const ttlMs = getAppConfig().mailCacheSeconds * 1000;
+  const cache = getMailCache();
+
+  // 캐시가 없거나, 강제 새로고침이거나, 캐시를 끈 경우 → 새 결과를 기다린다
+  if (force || !cache || ttlMs <= 0) {
+    const payload = await refreshMailCache(fetchFresh);
+    return NextResponse.json({ ...withFlags(payload), cached: false, stale: false });
+  }
+
+  const stale = Date.now() - cache.fetchedAt >= ttlMs;
+  if (stale) {
+    // 만료돼도 버리지 않는다 — 낡은 값을 바로 주고 뒤에서 갱신
+    revalidateInBackground(fetchFresh);
+  }
+
+  return NextResponse.json({ ...withFlags(cache), cached: true, stale });
 }

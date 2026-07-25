@@ -5,7 +5,13 @@ import { CSS } from "@dnd-kit/utilities";
 
 import { InboxCard, type InboxCardData } from "./inbox-card";
 
-export function SortableInboxCard({ data }: { data: InboxCardData }) {
+export function SortableInboxCard({
+  data,
+  onFlagsChanged,
+}: {
+  data: InboxCardData;
+  onFlagsChanged?: () => void;
+}) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: data.account.id });
 
@@ -19,7 +25,7 @@ export function SortableInboxCard({ data }: { data: InboxCardData }) {
 
   return (
     <div ref={setNodeRef} style={style} {...attributes} {...listeners}>
-      <InboxCard data={data} />
+      <InboxCard data={data} onFlagsChanged={onFlagsChanged} />
     </div>
   );
 }

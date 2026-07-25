@@ -20,6 +20,12 @@ const envSchema = z.object({
    */
   AUTH_PASSWORD: z.string().optional(),
   AUTH_SECRET: z.string().optional(),
+
+  /**
+   * MemoBento 로 건너가는 헤더 버튼의 주소 (선택).
+   * 비우면 지금 접속한 호스트의 3001 포트로 유추한다.
+   */
+  MEMOBENTO_URL: z.string().optional(),
 });
 
 export const env = envSchema.parse(process.env);

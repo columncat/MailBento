@@ -1,6 +1,6 @@
-import type { Account, Provider } from "../db/schema";
+import type { Account, MessageMark, Provider } from "../db/schema";
 
-export type { Provider };
+export type { MessageMark, Provider };
 
 export interface MailMessage {
   /** 제공자 고유 메시지 ID. */
@@ -14,7 +14,13 @@ export interface MailMessage {
   receivedAt: number;
   /** 본문 미리보기 (제공자가 주는 경우만). */
   snippet: string | null;
+  /**
+   * 표시용 안읽음 상태 — 서버의 \Seen 에 앱 내부 "읽음 처리"를 덮어씌운 값.
+   * 앱에서 읽음 처리했으면 서버가 안읽음이어도 false.
+   */
   unread: boolean;
+  /** 앱 내부 표식 (없으면 null / 미설정이면 undefined). */
+  mark?: MessageMark | null;
 }
 
 export interface MailAddress {

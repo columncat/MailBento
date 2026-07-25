@@ -3,10 +3,11 @@
 import { AlertCircle, ExternalLink, Inbox, Loader2 } from "lucide-react";
 import { useState } from "react";
 
-import type { Provider } from "@/lib/db/schema";
+import type { MessageMark, Provider } from "@/lib/db/schema";
 import type { MailMessage } from "@/lib/providers/types";
 import { cn, formatRelativeTime } from "@/lib/utils";
 
+import { MarkPicker } from "./message-mark";
 import { MessageModal } from "./message-modal";
 import { ProviderIcon } from "./provider-icon";
 
@@ -26,10 +27,36 @@ export interface InboxCardData {
   error: string | null;
 }
 
-export function InboxCard({ data }: { data: InboxCardData }) {
+export function InboxCard({
+  data,
+  onFlagsChanged,
+}: {
+  data: InboxCardData;
+  /** 읽음/표식이 바뀌면 대시보드가 목록을 다시 읽도록 알린다. */
+  onFlagsChanged?: () => void;
+}) {
   const { account, messages, unreadCount, error, loading } = data;
   const [openMessageId, setOpenMessageId] = useState<string | null>(null);
   const hasMessages = messages.length > 0;
+
+  const patchFlag = async (
+    messageId: string,
+    patch: { read?: boolean; mark?: MessageMark | null },
+  ) => {
+    try {
+      await fetch(
+        `/api/mail/${account.id}/${encodeURIComponent(messageId)}`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(patch),
+        },
+      );
+      onFlagsChanged?.();
+    } catch {
+      /* 네트워크 오류 — 다음 새로고침에서 반영 */
+    }
+  };
 
   // override 값이 있으면 우선 사용
   const shownEmail = account.displayEmail ?? account.email;
@@ -90,55 +117,72 @@ export function InboxCard({ data }: { data: InboxCardData }) {
         ) : (
           <ul className="scrollbar-thin flex flex-1 flex-col divide-y divide-(--color-border-soft) overflow-y-auto">
             {messages.map((m) => (
-              <li key={m.id}>
-                <button
-                  type="button"
-                  onClick={() => setOpenMessageId(m.id)}
+              <li
+                key={m.id}
+                role="button"
+                tabIndex={0}
+                onClick={() => setOpenMessageId(m.id)}
+                onKeyDown={(e) => {
+                  if (e.target !== e.currentTarget) return;
+                  if (e.key === "Enter" || e.key === " ") {
+                    e.preventDefault();
+                    setOpenMessageId(m.id);
+                  }
+                }}
+                className={cn(
+                  "group/row flex w-full cursor-pointer items-start gap-3 px-5 py-3 text-left transition hover:bg-(--color-surface-hi)",
+                  m.unread && "bg-(--color-accent)/[0.04]",
+                )}
+              >
+                <span
+                  aria-hidden
                   className={cn(
-                    "group/row flex w-full items-start gap-3 px-5 py-3 text-left transition hover:bg-(--color-surface-hi)",
-                    m.unread && "bg-(--color-accent)/[0.04]",
+                    "mt-2 h-1.5 w-1.5 shrink-0 rounded-full",
+                    m.unread ? "bg-(--color-accent)" : "bg-transparent",
                   )}
-                >
-                  <span
-                    aria-hidden
-                    className={cn(
-                      "mt-2 h-1.5 w-1.5 shrink-0 rounded-full",
-                      m.unread ? "bg-(--color-accent)" : "bg-transparent",
-                    )}
-                  />
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-baseline justify-between gap-2">
-                      <span
-                        className={cn(
-                          "truncate text-[13px]",
-                          m.unread
-                            ? "font-semibold text-(--color-fg)"
-                            : "text-(--color-fg-2)",
-                        )}
-                      >
-                        {m.from.name ?? m.from.email}
-                      </span>
-                      <span className="shrink-0 font-mono text-[10.5px] text-(--color-fg-4)">
-                        {formatRelativeTime(m.receivedAt)}
-                      </span>
-                    </div>
-                    <div
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-baseline justify-between gap-2">
+                    <span
                       className={cn(
                         "truncate text-[13px]",
                         m.unread
-                          ? "text-(--color-fg-2)"
-                          : "text-(--color-fg-3)",
+                          ? "font-semibold text-(--color-fg)"
+                          : "text-(--color-fg-2)",
                       )}
                     >
-                      {m.subject}
-                    </div>
-                    {m.snippet && (
-                      <div className="mt-0.5 line-clamp-1 text-[11.5px] text-(--color-fg-4)">
-                        {m.snippet}
-                      </div>
-                    )}
+                      {m.from.name ?? m.from.email}
+                    </span>
+                    <span className="shrink-0 font-mono text-[10.5px] text-(--color-fg-4)">
+                      {formatRelativeTime(m.receivedAt)}
+                    </span>
                   </div>
-                </button>
+                  <div
+                    className={cn(
+                      "truncate text-[13px]",
+                      m.unread ? "text-(--color-fg-2)" : "text-(--color-fg-3)",
+                    )}
+                  >
+                    {m.subject}
+                  </div>
+                  {m.snippet && (
+                    <div className="mt-0.5 line-clamp-1 text-[11.5px] text-(--color-fg-4)">
+                      {m.snippet}
+                    </div>
+                  )}
+                </div>
+
+                {/* 표식 — 달려 있으면 항상 보이고, 없으면 hover 때만 */}
+                <MarkPicker
+                  current={m.mark}
+                  onPick={(mark) => void patchFlag(m.id, { mark })}
+                  className={cn(
+                    "mt-0.5 transition",
+                    m.mark
+                      ? "opacity-100"
+                      : "opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100",
+                  )}
+                />
               </li>
             ))}
           </ul>
@@ -150,6 +194,7 @@ export function InboxCard({ data }: { data: InboxCardData }) {
         accountDisplayName={account.displayName}
         messageId={openMessageId}
         onClose={() => setOpenMessageId(null)}
+        onFlagsChanged={onFlagsChanged}
       />
     </>
   );

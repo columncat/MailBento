@@ -39,6 +39,7 @@ import {
   type WidgetState,
 } from "@/lib/widget-storage";
 
+import { MemoBentoLink } from "./cross-app-link";
 import { InboxCard } from "./inbox-card";
 import { SortableInboxCard } from "./sortable-inbox-card";
 import { WidgetFoldersWing } from "./widget-folders-wing";
@@ -75,6 +76,7 @@ export function Dashboard({
   forceOnInterval,
   widgetEnabled,
   onWidgetToggle,
+  memobentoUrl,
 }: {
   initialAccounts: AccountSummary[];
   initialWidgetState: WidgetState;
@@ -82,6 +84,8 @@ export function Dashboard({
   forceOnInterval: boolean;
   widgetEnabled: boolean;
   onWidgetToggle: (v: boolean) => void;
+  /** MEMOBENTO_URL override. null 이면 현재 호스트의 3001 포트로 유추. */
+  memobentoUrl: string | null;
 }) {
   const [boxes, setBoxes] = useState<BoxState[]>(() =>
     initialAccounts.map((a) => ({
@@ -212,15 +216,16 @@ export function Dashboard({
 
   // ─ 메일 fetch ─
   const fetchInboxes = useCallback(
-    async (showSpinner: boolean, force = showSpinner) => {
+    async (showSpinner: boolean, force = showSpinner, silent = false) => {
     abortRef.current?.abort();
     const ac = new AbortController();
     abortRef.current = ac;
 
     if (showSpinner) setRefreshing(true);
-    setBoxes((prev) =>
-      prev.map((b) => ({ ...b, loading: true, error: null })),
-    );
+    // silent = 표식만 다시 읽는 경우. 스켈레톤이 번쩍이지 않게 loading 을 건드리지 않는다.
+    if (!silent) {
+      setBoxes((prev) => prev.map((b) => ({ ...b, loading: true, error: null })));
+    }
 
     try {
       // force = 서버 캐시 무시. 수동 새로고침은 항상 force,
@@ -308,6 +313,11 @@ export function Dashboard({
     });
   };
 
+  /** 읽음/표식 변경 후 목록만 다시 읽는다 (캐시 사용 → IMAP 재조회 없음). */
+  const onFlagsChanged = useCallback(() => {
+    void fetchInboxes(false, false, true);
+  }, [fetchInboxes]);
+
   const totalUnread = boxes.reduce((s, b) => s + (b.unreadCount ?? 0), 0);
 
   const inboxGrid =
@@ -325,7 +335,11 @@ export function Dashboard({
         >
           <section className={cn("grid gap-4", COLUMN_CLASS[columns])}>
             {boxes.map((b) => (
-              <SortableInboxCard key={b.account.id} data={b} />
+              <SortableInboxCard
+                key={b.account.id}
+                data={b}
+                onFlagsChanged={onFlagsChanged}
+              />
             ))}
           </section>
         </SortableContext>
@@ -358,6 +372,7 @@ export function Dashboard({
         </div>
 
         <div className="flex items-center gap-2">
+          <MemoBentoLink href={memobentoUrl} />
           <button
             type="button"
             onClick={() => fetchInboxes(true)}
