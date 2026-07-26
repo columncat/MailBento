@@ -4,12 +4,30 @@ import { ArrowUpRight, NotebookPen } from "lucide-react";
 import { useEffect, useState } from "react";
 
 /**
- * 자매 앱(MemoBento)으로 건너가는 버튼.
+ * 형제 앱 주소 유추.
  *
- * URL 은 서버가 `MEMOBENTO_URL` 로 지정하면 그 값을 쓰고,
- * 없으면 **지금 보고 있는 호스트의 다른 포트**로 유추한다.
- * (LAN IP / Tailscale IP / MagicDNS 어느 쪽으로 접속했든 그대로 따라가도록)
+ * 접속 경로에 따라 정답이 다르다:
+ *   - `mailbento.columncat.cc` 처럼 서브도메인으로 들어왔으면 → 형제 서브도메인.
+ *     도메인에는 앱 포트가 열려 있지 않으므로 포트를 붙이면 깨진다.
+ *   - LAN IP / Tailscale IP / MagicDNS 로 들어왔으면 → 같은 호스트의 다른 포트.
+ *
+ * 덕분에 들어온 경로를 그대로 따라간다. 서버가 `href`(환경변수 override)를 주면
+ * 그 값이 항상 이긴다.
  */
+export function siblingAppUrl(
+  self: string,
+  sibling: string,
+  defaultPort: number,
+): string {
+  const { protocol, hostname } = window.location;
+  const parts = hostname.split(".");
+  if (parts.length >= 3 && parts[0].toLowerCase() === self) {
+    return `${protocol}//${[sibling, ...parts.slice(1)].join(".")}`;
+  }
+  return `${protocol}//${hostname}:${defaultPort}`;
+}
+
+/** 자매 앱(MemoBento)으로 건너가는 버튼. */
 export function MemoBentoLink({
   href,
   defaultPort = 3001,
@@ -24,9 +42,7 @@ export function MemoBentoLink({
       setUrl(href);
       return;
     }
-    setUrl(
-      `${window.location.protocol}//${window.location.hostname}:${defaultPort}`,
-    );
+    setUrl(siblingAppUrl("mailbento", "memobento", defaultPort));
   }, [href, defaultPort]);
 
   return (
