@@ -203,7 +203,10 @@ export function InboxCard({
  *
  * 오른쪽 끝에 표식과 보관을 세로로 쌓되 흐름에서 빼 둔다. 그대로 두면 두
  * 아이콘(24+24+간격)이 글자보다 키가 커서 줄 높이를 끌어올린다 — 목록이
- * 통째로 성겨진다. 그만큼 오른쪽 여백을 비워 글자와 겹치지도 않게 한다.
+ * 통째로 성겨진다.
+ *
+ * 줄 여백은 예전 그대로다. 오른쪽만 예전에 표식 하나가 차지하던 폭(간격 12 +
+ * 아이콘 24 + 여백 20 = 56px)을 비워 두어, 글자가 놓이는 자리는 달라지지 않는다.
  */
 function MailRow({
   message: m,
@@ -234,14 +237,14 @@ function MailRow({
           }
         }}
         className={cn(
-          "flex w-full cursor-pointer items-start gap-2 py-1.5 pr-8 pl-3.5 text-left transition hover:bg-(--color-surface-hi)",
+          "flex w-full cursor-pointer items-start gap-3 py-3 pr-14 pl-5 text-left transition hover:bg-(--color-surface-hi)",
           m.unread && "bg-(--color-accent)/[0.04]",
         )}
       >
                 <span
                   aria-hidden
                   className={cn(
-                    "mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full",
+                    "mt-2 h-1.5 w-1.5 shrink-0 rounded-full",
                     m.unread ? "bg-(--color-accent)" : "bg-transparent",
                   )}
                 />
@@ -279,7 +282,7 @@ function MailRow({
       </div>
 
       {/* 표식 위, 보관 아래. 줄 높이를 늘리지 않도록 띄워 둔다. */}
-      <div className="absolute top-1/2 right-0.5 flex -translate-y-1/2 flex-col items-center gap-0.5">
+      <div className="absolute top-1/2 right-5 flex -translate-y-1/2 flex-col items-center gap-0.5">
         {/* 값이 있으면 항상 보이고, 없으면 hover 때만 */}
         <MarkPicker
           current={m.mark}
@@ -326,7 +329,7 @@ function LoadingBody() {
       {Array.from({ length: 6 }).map((_, i) => (
         <li
           key={i}
-          className="flex items-start gap-2 py-1.5 pr-8 pl-3.5"
+          className="flex items-start gap-3 px-5 py-3"
           style={{ opacity: 1 - i * 0.12 }}
         >
           <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-(--color-border)" />
