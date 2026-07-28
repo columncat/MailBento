@@ -45,6 +45,8 @@ import { SortableInboxCard } from "./sortable-inbox-card";
 import { WidgetFoldersWing } from "./widget-folders-wing";
 import { WidgetHeader } from "./widget-header";
 import { WidgetSideWing } from "./widget-side-wing";
+import type { ArchivedSummary } from "@/lib/archive-server";
+import { MessageModal } from "./message-modal";
 
 export interface AccountSummary {
   id: number;
@@ -147,6 +149,24 @@ export function Dashboard({
   const [widgetState, setWidgetState] = useState<WidgetState>(
     initialWidgetState,
   );
+  // 보관함은 widget_state(단일 행 JSON)가 아니라 자체 테이블에 산다 —
+  // 본문 사본이 들어가므로 순서 한 칸 바꿀 때마다 수 MB 를 왕복할 수 없다.
+  const [archived, setArchived] = useState<ArchivedSummary[]>([]);
+  const [openArchiveId, setOpenArchiveId] = useState<number | null>(null);
+
+  const loadArchived = useCallback(async () => {
+    try {
+      const res = await fetch("/api/archive", { cache: "no-store" });
+      const json = await res.json();
+      if (res.ok) setArchived(json.archived ?? []);
+    } catch {
+      /* 다음 시도에서 복구 */
+    }
+  }, []);
+
+  useEffect(() => {
+    void loadArchived();
+  }, [loadArchived]);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // 서버 저장 (디바운스) — 폴더/핀/메모 변경 시 호출
@@ -313,10 +333,14 @@ export function Dashboard({
     });
   };
 
-  /** 읽음/표식 변경 후 목록만 다시 읽는다 (캐시 사용 → IMAP 재조회 없음). */
+  /**
+   * 읽음/표식/보관 변경 후 목록만 다시 읽는다 (캐시 사용 → IMAP 재조회 없음).
+   * 보관함도 함께 읽는다 — 목록의 보관 버튼이 두 곳을 동시에 바꾼다.
+   */
   const onFlagsChanged = useCallback(() => {
     void fetchInboxes(false, false, true);
-  }, [fetchInboxes]);
+    void loadArchived();
+  }, [fetchInboxes, loadArchived]);
 
   const totalUnread = boxes.reduce((s, b) => s + (b.unreadCount ?? 0), 0);
 
@@ -456,8 +480,11 @@ export function Dashboard({
                 <WidgetSideWing
                   pins={widgetState.pins}
                   memos={widgetState.memos}
+                  archived={archived}
                   onPinsChange={updatePins}
                   onMemosChange={updateMemos}
+                  onArchivedChange={setArchived}
+                  onOpenArchived={(item) => setOpenArchiveId(item.id)}
                 />
               </div>
             </div>
@@ -476,8 +503,11 @@ export function Dashboard({
               <WidgetSideWing
                 pins={widgetState.pins}
                 memos={widgetState.memos}
+                archived={archived}
                 onPinsChange={updatePins}
                 onMemosChange={updateMemos}
+                onArchivedChange={setArchived}
+                onOpenArchived={(item) => setOpenArchiveId(item.id)}
               />
             </div>
           </div>
@@ -485,6 +515,15 @@ export function Dashboard({
       ) : (
         <div className="mx-auto w-full max-w-[1440px]">{inboxGrid}</div>
       )}
+
+      {/* 보관본 열람 — 사본을 그대로 읽으므로 IMAP 을 타지 않는다 */}
+      <MessageModal
+        accountId={0}
+        accountDisplayName="보관함"
+        messageId={openArchiveId ? String(openArchiveId) : null}
+        archiveId={openArchiveId}
+        onClose={() => setOpenArchiveId(null)}
+      />
 
       <footer className="mt-2 text-center text-xs text-(--color-fg-4)">
         MailBento · 박스 드래그로 순서변경

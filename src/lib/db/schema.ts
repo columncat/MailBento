@@ -1,5 +1,6 @@
 import { sql } from "drizzle-orm";
 import {
+  index,
   integer,
   sqliteTable,
   text,
@@ -140,3 +141,83 @@ export const messageFlags = sqliteTable(
 );
 
 export type MessageFlagRow = typeof messageFlags.$inferSelect;
+
+/**
+ * 보관함 — 메일함 카드에서 "보관"한 메일의 **사본**.
+ *
+ * 참조만 담지 않는 이유: IMAP UID 는 메일이 지워지거나 UIDVALIDITY 가 바뀌면
+ * 더 이상 같은 메일을 가리키지 않는다. 그래서 모달이 그리는 값
+ * (MailMessageDetail) 을 통째로 떠 온다 — 원본이 서버에서 사라져도 그대로 열린다.
+ *
+ * 첨부는 보관하지 않는다. MailMessageDetail 에 첨부 필드가 없고 imap 구현도
+ * parsed.attachments 를 읽지 않는다. 본문의 cid: 이미지는 지금도 깨진 채로
+ * 보이며, 보관하면 그 상태가 그대로 굳는다.
+ */
+export const archivedMessages = sqliteTable(
+  "archived_messages",
+  {
+    id: integer("id").primaryKey({ autoIncrement: true }),
+
+    /**
+     * 보관 당시의 메일함(=뷰) row.
+     *
+     * message_flags 와 달리 cascade 가 아니다. accounts 는 메일함이 아니라
+     * "뷰"라 복제로 늘어나고, 무엇보다 백업 불러오기가 전 계정을 지운다
+     * (api/import). cascade 였다면 "백업 복원 = 보관함 전멸"이 된다.
+     */
+    sourceAccountId: integer("source_account_id").references(() => accounts.id, {
+      onDelete: "set null",
+    }),
+    /** 계정 행이 사라진 뒤에도 어디서 온 메일인지 보여주려고 떠 두는 값. */
+    sourceLabel: text("source_label").notNull(),
+    sourceEmail: text("source_email").notNull().default(""),
+    sourceIconUrl: text("source_icon_url"),
+    /** 원본 IMAP UID — 되돌아가 볼 때의 힌트일 뿐, 사본의 정체성은 아니다. */
+    sourceMessageId: text("source_message_id").notNull(),
+
+    // ── MailMessageDetail 사본 ──
+    subject: text("subject").notNull(),
+    fromName: text("from_name"),
+    fromEmail: text("from_email").notNull().default(""),
+    /** MailAddress[] JSON. 주소는 개수가 정해지지 않아 컬럼으로 쪼갤 수 없다. */
+    toJson: text("to_json").notNull().default("[]"),
+    ccJson: text("cc_json").notNull().default("[]"),
+    /**
+     * 수신 시각 (unix **ms**).
+     * MailMessage.receivedAt 이 ms 라 Date 로 바꿨다 되돌리지 않고 그대로 담는다.
+     * mode:"timestamp" 는 초 단위라 ms 가 잘린다.
+     */
+    receivedAt: integer("received_at").notNull(),
+    snippet: text("snippet"),
+    /** 보관 시점에 이미 sanitize 된 HTML. 꺼낼 때 다시 정제하지 않는다. */
+    html: text("html"),
+    text: text("text"),
+    /** 1 = 상한을 넘어 본문이 잘렸음. */
+    truncated: integer("truncated").notNull().default(0),
+
+    /** 보관 시점의 표식 스냅샷 — message_flags 는 계정과 함께 사라진다. */
+    read: integer("read").notNull().default(0),
+    mark: text("mark", { enum: MESSAGE_MARKS }),
+
+    /** 보관함 안의 수동 순서 (작을수록 위). */
+    position: integer("position").notNull().default(0),
+    archivedAt: integer("archived_at", { mode: "timestamp" })
+      .notNull()
+      .default(sql`(unixepoch())`),
+  },
+  (t) => ({
+    /**
+     * 같은 메일을 두 번 담지 않게 하는 키.
+     * 계정이 지워져 sourceAccountId 가 null 이 되면 SQLite 는 NULL 을 서로 다른
+     * 값으로 보므로 더는 걸리지 않는다 — 원본 메일함이 없어진 뒤의 중복은
+     * 막을 대상이 아니라서 그대로 둔다.
+     */
+    uniq: uniqueIndex("archived_messages_source_idx").on(
+      t.sourceAccountId,
+      t.sourceMessageId,
+    ),
+    posIdx: index("archived_messages_position_idx").on(t.position),
+  }),
+);
+
+export type ArchivedMessageRow = typeof archivedMessages.$inferSelect;

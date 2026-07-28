@@ -1,6 +1,13 @@
 "use client";
 
-import { AlertCircle, ExternalLink, Inbox, Loader2 } from "lucide-react";
+import {
+  AlertCircle,
+  Archive,
+  ArchiveX,
+  ExternalLink,
+  Inbox,
+  Loader2,
+} from "lucide-react";
 import { useState } from "react";
 
 import type { MessageMark, Provider } from "@/lib/db/schema";
@@ -37,6 +44,34 @@ export function InboxCard({
 }) {
   const { account, messages, unreadCount, error, loading } = data;
   const [openMessageId, setOpenMessageId] = useState<string | null>(null);
+  const [busyArchive, setBusyArchive] = useState<string | null>(null);
+
+  /**
+   * 보관 토글.
+   *
+   * 본문은 서버가 알아서 구한다 — 목록 행에는 본문이 없고, 클라이언트가 보낸
+   * HTML 을 그대로 저장하면 sanitize 를 우회하는 길이 열린다.
+   */
+  const toggleArchive = async (m: MailMessage) => {
+    if (busyArchive) return;
+    setBusyArchive(m.id);
+    try {
+      if (m.archiveId) {
+        await fetch(`/api/archive/${m.archiveId}`, { method: "DELETE" });
+      } else {
+        await fetch("/api/archive", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ accountId: account.id, messageId: m.id }),
+        });
+      }
+      onFlagsChanged?.();
+    } catch {
+      /* 네트워크 오류 — 다음 새로고침에서 반영 */
+    } finally {
+      setBusyArchive(null);
+    }
+  };
   const hasMessages = messages.length > 0;
 
   const patchFlag = async (
@@ -172,6 +207,32 @@ export function InboxCard({
                   )}
                 </div>
 
+                {/* 보관 — 담겨 있으면 항상 보이고, 없으면 hover 때만 */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void toggleArchive(m);
+                  }}
+                  aria-pressed={!!m.archiveId}
+                  disabled={busyArchive === m.id}
+                  className={cn(
+                    "mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md transition",
+                    m.archiveId
+                      ? "text-(--color-accent-strong) opacity-100"
+                      : "text-(--color-fg-4) opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 hover:text-(--color-fg-2)",
+                    busyArchive === m.id && "opacity-50",
+                  )}
+                  aria-label={m.archiveId ? "보관 해제" : "보관함에 담기"}
+                  title={m.archiveId ? "보관 해제" : "보관함에 담기"}
+                >
+                  {m.archiveId ? (
+                    <ArchiveX className="h-3.5 w-3.5" />
+                  ) : (
+                    <Archive className="h-3.5 w-3.5" />
+                  )}
+                </button>
+
                 {/* 표식 — 달려 있으면 항상 보이고, 없으면 hover 때만 */}
                 <MarkPicker
                   current={m.mark}
@@ -195,6 +256,13 @@ export function InboxCard({
         messageId={openMessageId}
         onClose={() => setOpenMessageId(null)}
         onFlagsChanged={onFlagsChanged}
+        archivedId={
+          messages.find((m) => m.id === openMessageId)?.archiveId ?? null
+        }
+        onToggleArchive={() => {
+          const m = messages.find((x) => x.id === openMessageId);
+          if (m) void toggleArchive(m);
+        }}
       />
     </>
   );

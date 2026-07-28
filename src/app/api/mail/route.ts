@@ -9,6 +9,7 @@ import {
   revalidateInBackground,
   type MailPayload,
 } from "@/lib/mail-cache";
+import { archiveIdsBySource } from "@/lib/archive-server";
 import { loadFlags } from "@/lib/message-flags";
 import { fetchInboxesGrouped } from "@/lib/providers/imap";
 import type { InboxFetchResult } from "@/lib/providers/types";
@@ -62,15 +63,20 @@ async function fetchFresh(): Promise<MailPayload> {
  */
 function withFlags(payload: MailPayload): MailPayload {
   const flags = loadFlags(payload.inboxes.map((i) => i.account.id));
-  if (flags.size === 0) return payload;
+  // 보관 여부는 표식과 달리 하나도 없을 때도 확인해야 한다 — 아래에서 조기
+  // 반환하지 않는 이유다.
+  const archived = archiveIdsBySource();
+  if (flags.size === 0 && archived.size === 0) return payload;
 
   const inboxes = payload.inboxes.map((inbox) => {
     let readLocally = 0;
     const messages = inbox.messages.map((m) => {
-      const f = flags.get(`${inbox.account.id}:${m.id}`);
-      if (!f) return m;
+      const key = `${inbox.account.id}:${m.id}`;
+      const archiveId = archived.get(key) ?? null;
+      const f = flags.get(key);
+      if (!f) return { ...m, archiveId };
       if (m.unread && f.read) readLocally++;
-      return { ...m, unread: m.unread && !f.read, mark: f.mark };
+      return { ...m, unread: m.unread && !f.read, mark: f.mark, archiveId };
     });
     // 서버 기준 안읽음 수에서 앱에서 읽음 처리한 만큼 뺀다 (음수 방지)
     const unreadCount =

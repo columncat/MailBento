@@ -4,6 +4,7 @@ import { z } from "zod";
 
 import { db, schema } from "@/lib/db";
 import { MESSAGE_MARKS } from "@/lib/db/schema";
+import { rememberDetail } from "@/lib/message-detail-cache";
 import { setFlag } from "@/lib/message-flags";
 import { getProvider, isProviderImplemented } from "@/lib/providers";
 
@@ -40,6 +41,9 @@ export async function GET(
       account,
       decodeURIComponent(messageId),
     );
+    // 방금 받은 본문을 잠깐 기억해 둔다 — 이어서 "보관"을 누르면 IMAP 을
+    // 다시 치지 않고 이 값을 그대로 뜬다.
+    rememberDetail(id, decodeURIComponent(messageId), message);
     // 열람 = 읽음. 서버의 \Seen 은 건드리지 않고 앱 안에서만 표시한다.
     const flag = setFlag(id, decodeURIComponent(messageId), { read: true });
     return NextResponse.json({

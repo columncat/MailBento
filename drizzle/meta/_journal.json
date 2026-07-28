@@ -64,6 +64,13 @@
       "when": 1784991522638,
       "tag": "0008_fresh_penance",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1785220807227,
+      "tag": "0009_tired_talisman",
+      "breakpoints": true
     }
   ]
 }

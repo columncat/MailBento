@@ -21,6 +21,8 @@ export interface MailMessage {
   unread: boolean;
   /** 앱 내부 표식 (없으면 null / 미설정이면 undefined). */
   mark?: MessageMark | null;
+  /** 보관함에 담겨 있으면 그 행 id. 목록의 보관 버튼이 토글로 동작하게 한다. */
+  archiveId?: number | null;
 }
 
 export interface MailAddress {

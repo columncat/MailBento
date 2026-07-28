@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 
 import { decrypt } from "@/lib/crypto";
 import { db, schema } from "@/lib/db";
+import { exportArchived } from "@/lib/archive-server";
 import { getWidgetState } from "@/lib/widget-server";
 
 export const dynamic = "force-dynamic";
@@ -34,9 +35,11 @@ export async function GET() {
   return NextResponse.json({
     app: "mailbento",
     type: "backup",
-    version: 2,
+    version: 3,
     exportedAt: new Date().toISOString(),
     accounts,
     widget: getWidgetState(),
+    // 보관 사본까지 실어야 다른 인스턴스로 옮겨도 따라온다
+    archived: exportArchived(),
   });
 }

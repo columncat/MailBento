@@ -4,6 +4,7 @@ import { z } from "zod";
 import { encrypt } from "@/lib/crypto";
 import { db, schema } from "@/lib/db";
 import { invalidateMailCache } from "@/lib/mail-cache";
+import { importArchived } from "@/lib/archive-server";
 import { setWidgetState } from "@/lib/widget-server";
 
 export const dynamic = "force-dynamic";
@@ -25,6 +26,8 @@ const accountSchema = z.object({
 const bodySchema = z.object({
   accounts: z.array(accountSchema).optional(),
   widget: z.unknown().optional(),
+  /** 보관 사본. version 3 부터. */
+  archived: z.array(z.unknown()).optional(),
 });
 
 /**
@@ -67,9 +70,17 @@ export async function PUT(req: Request) {
     setWidgetState(parsed.widget as Parameters<typeof setWidgetState>[0]);
   }
 
+  // 계정을 통째로 지운 뒤이므로 보관 사본의 source_account_id 는 이미 null 이
+  // 되어 있다(FK set null). 백업에 있는 것으로 갈아끼운다.
+  let archivedCount = 0;
+  if (parsed.archived) {
+    archivedCount = importArchived(parsed.archived);
+  }
+
   invalidateMailCache();
   return NextResponse.json({
     ok: true,
     accounts: parsed.accounts?.length ?? 0,
+    archived: archivedCount,
   });
 }

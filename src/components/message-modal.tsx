@@ -1,10 +1,11 @@
 "use client";
 
 import * as Dialog from "@radix-ui/react-dialog";
-import { AlertCircle, Loader2, MailOpen, X } from "lucide-react";
+import { AlertCircle, Archive, ArchiveX, Loader2, MailOpen, X } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
 import type { MessageMark } from "@/lib/db/schema";
+import { cn } from "@/lib/utils";
 import type { MailMessageDetail } from "@/lib/providers/types";
 
 import { MarkPicker } from "./message-mark";
@@ -17,6 +18,17 @@ interface Props {
   onClose: () => void;
   /** 읽음/표식이 바뀌면 목록을 다시 읽도록 알린다. */
   onFlagsChanged?: () => void;
+  /**
+   * 보관본을 열 때의 행 id.
+   *
+   * 주면 IMAP 을 타지 않고 사본을 그대로 읽는다. 라이브 경로는 계정이 없으면
+   * 404 를 내고 열람과 동시에 읽음 표시를 남기는데, 원본이 사라진 사본에는
+   * 둘 다 맞지 않는다.
+   */
+  archiveId?: number | null;
+  /** 라이브 메일일 때 보관 토글. 보관돼 있으면 그 행 id 가 들어온다. */
+  archivedId?: number | null;
+  onToggleArchive?: () => void;
 }
 
 interface Flag {
@@ -30,6 +42,9 @@ export function MessageModal({
   messageId,
   onClose,
   onFlagsChanged,
+  archiveId,
+  archivedId,
+  onToggleArchive,
 }: Props) {
   const [detail, setDetail] = useState<MailMessageDetail | null>(null);
   const [loading, setLoading] = useState(false);
@@ -42,7 +57,11 @@ export function MessageModal({
       if (!messageId) return;
       setFlagState((prev) => ({ ...prev, ...patch }));
       try {
-        await fetch(`/api/mail/${accountId}/${encodeURIComponent(messageId)}`, {
+        // 보관본의 표식은 사본 자신에 남긴다 — 원본 계정이 이미 없을 수 있다
+        const url = archiveId
+          ? `/api/archive/${archiveId}`
+          : `/api/mail/${accountId}/${encodeURIComponent(messageId)}`;
+        await fetch(url, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(patch),
@@ -52,7 +71,7 @@ export function MessageModal({
         /* 네트워크 오류 — 다음 새로고침에서 반영 */
       }
     },
-    [accountId, messageId, onFlagsChanged],
+    [accountId, messageId, archiveId, onFlagsChanged],
   );
 
   useEffect(() => {
@@ -67,10 +86,11 @@ export function MessageModal({
     setError(null);
     setDetail(null);
 
-    fetch(`/api/mail/${accountId}/${encodeURIComponent(messageId)}`, {
-      signal: ac.signal,
-      cache: "no-store",
-    })
+    // 보관본은 사본을 그대로 읽는다 — IMAP 도, 읽음 표시도 타지 않는다
+    const url = archiveId
+      ? `/api/archive/${archiveId}`
+      : `/api/mail/${accountId}/${encodeURIComponent(messageId)}`;
+    fetch(url, { signal: ac.signal, cache: "no-store" })
       .then(async (res) => {
         const json = await res.json();
         if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
@@ -90,7 +110,7 @@ export function MessageModal({
 
     return () => ac.abort();
     // onFlagsChanged 는 상위에서 useCallback 으로 고정 — 넣어도 재실행되지 않음
-  }, [accountId, messageId, onFlagsChanged]);
+  }, [accountId, messageId, archiveId, onFlagsChanged]);
 
   const open = !!messageId;
   const dateStr = detail
@@ -139,6 +159,29 @@ export function MessageModal({
               </div>
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
+              {/* 보관 — 사본을 떠 둔다. 원본이 서버에서 사라져도 남는다.
+                  보관본을 보고 있을 때는 이미 사본이라 띄우지 않는다. */}
+              {!archiveId && onToggleArchive && (
+                <button
+                  type="button"
+                  onClick={onToggleArchive}
+                  aria-pressed={!!archivedId}
+                  className={cn(
+                    "grid h-8 w-8 place-items-center rounded-md ring-1 transition",
+                    archivedId
+                      ? "bg-(--color-accent-soft) text-(--color-accent-strong) ring-(--color-accent)/40"
+                      : "bg-(--color-bg-2) text-(--color-fg-3) ring-(--color-border-soft) hover:text-(--color-fg)",
+                  )}
+                  aria-label={archivedId ? "보관 해제" : "보관함에 담기"}
+                  title={archivedId ? "보관 해제" : "보관함에 담기"}
+                >
+                  {archivedId ? (
+                    <ArchiveX className="h-4 w-4" />
+                  ) : (
+                    <Archive className="h-4 w-4" />
+                  )}
+                </button>
+              )}
               {/* 표식 — 서버 \Flagged 가 아니라 MailBento 안에서만 쓰는 마크 */}
               <MarkPicker
                 current={flag.mark}

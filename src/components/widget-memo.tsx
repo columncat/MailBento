@@ -31,7 +31,7 @@ export function WidgetMemo({ memos, onChange }: Props) {
   };
 
   return (
-    <section className="flex h-full min-h-0 flex-col rounded-[var(--radius-card)] bg-(--color-surface) p-5 ring-1 ring-(--color-border-soft)">
+    <section className="flex h-[460px] min-h-0 flex-col rounded-[var(--radius-card)] bg-(--color-surface) p-5 ring-1 ring-(--color-border-soft)">
       <header className="mb-3 flex shrink-0 items-center justify-between">
         <h2
           className="text-xl leading-tight"
