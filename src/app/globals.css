@@ -1,5 +1,22 @@
 @import "tailwindcss";
 
+/*
+ * 서울한강 장체 — 보관함 제목의 한글에만 쓴다.
+ *
+ * unicode-range 로 한글에만 걸어 둔다. 이 글꼴에도 라틴 글자가 있어서
+ * 제한하지 않으면 영문·숫자까지 가져가 Instrument Serif 가 무력해진다.
+ * 굵기는 한 벌만 싣는다 — 쓰는 자리가 제목 한 곳이고 파일이 1.5MB 다.
+ */
+@font-face {
+  font-family: "Seoul Hangang Condensed";
+  font-weight: 100 900;
+  font-style: normal;
+  font-display: swap;
+  src: url("https://cdn.jsdelivr.net/gh/fonts-archive/SeoulHangangCondensed/SeoulHangangCondensed-Medium.woff2")
+    format("woff2");
+  unicode-range: U+1100-11FF, U+3130-318F, U+A960-A97F, U+AC00-D7A3, U+D7B0-D7FF;
+}
+
 @theme {
   /* ===== 기본 (Forest, dark) — 따뜻한 다크 + 그린 ===== */
   --color-bg:          oklch(0.155 0.006 60);
@@ -29,6 +46,7 @@
   --font-mono: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, Consolas,
     monospace;
   --font-serif: "Instrument Serif", "Times New Roman", serif;
+
 
   --radius-card: 22px;
   --radius-app: 18px;
@@ -261,6 +279,11 @@
 @layer base {
   :root {
     color-scheme: dark;
+    /* 위젯 제목 전용 — 한글만 서울한강 장체가 가져간다.
+       @theme 이 아니라 여기 두는 이유: Tailwind v4 는 유틸리티가 참조하지
+       않는 테마 변수를 떨어내는데, 이 값은 인라인 style 에서만 쓰인다. */
+    --font-widget-title: "Instrument Serif", "Seoul Hangang Condensed",
+      "Times New Roman", serif;
   }
 
   html, body { margin: 0; padding: 0; }

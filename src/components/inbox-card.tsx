@@ -12,6 +12,7 @@ import { useState } from "react";
 
 import type { MessageMark, Provider } from "@/lib/db/schema";
 import type { MailMessage } from "@/lib/providers/types";
+import { useSwipe } from "@/lib/use-swipe";
 import { cn, formatRelativeTime } from "@/lib/utils";
 
 import { MarkPicker } from "./message-mark";
@@ -37,10 +38,16 @@ export interface InboxCardData {
 export function InboxCard({
   data,
   onFlagsChanged,
+  headerDragProps,
 }: {
   data: InboxCardData;
   /** 읽음/표식이 바뀌면 대시보드가 목록을 다시 읽도록 알린다. */
   onFlagsChanged?: () => void;
+  /**
+   * 카드 순서 손잡이 props. 머리말에 붙는다 —
+   * 카드 전체에 두면 본문 글자를 고를 수도, 목록을 터치로 굴릴 수도 없다.
+   */
+  headerDragProps?: React.HTMLAttributes<HTMLElement>;
 }) {
   const { account, messages, unreadCount, error, loading } = data;
   const [openMessageId, setOpenMessageId] = useState<string | null>(null);
@@ -100,8 +107,14 @@ export function InboxCard({
   return (
     <>
       <article className="group relative flex h-[460px] flex-col rounded-[var(--radius-card)] bg-(--color-surface) ring-1 ring-(--color-border-soft) transition hover:bg-(--color-surface-2)">
-        {/* 카드 헤더 */}
-        <header className="flex items-center justify-between border-b border-(--color-border-soft) px-5 py-4">
+        {/* 카드 헤더 — 여기를 잡아 카드 순서를 바꾼다 */}
+        <header
+          {...(headerDragProps ?? {})}
+          title={headerDragProps ? "머리말을 끌어 메일함 순서 변경" : undefined}
+          className={cn(
+            "flex items-center justify-between border-b border-(--color-border-soft) px-5 py-4",
+            headerDragProps && "cursor-grab touch-none active:cursor-grabbing",
+          )}>
           <div className="flex min-w-0 items-center gap-3">
             <div className="grid h-12 w-12 shrink-0 place-items-center rounded-lg bg-(--color-bg-2) ring-1 ring-(--color-border)">
               <ProviderIcon overrideUrl={account.iconUrl} size={32} />
@@ -116,7 +129,10 @@ export function InboxCard({
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div
+            onPointerDown={(e) => e.stopPropagation()}
+            className="flex items-center gap-2"
+          >
             {loading && (
               <Loader2 className="h-3.5 w-3.5 animate-spin text-(--color-fg-4)" />
             )}
@@ -152,23 +168,102 @@ export function InboxCard({
         ) : (
           <ul className="scrollbar-thin flex flex-1 flex-col divide-y divide-(--color-border-soft) overflow-y-auto">
             {messages.map((m) => (
-              <li
+              <MailRow
                 key={m.id}
-                role="button"
-                tabIndex={0}
-                onClick={() => setOpenMessageId(m.id)}
-                onKeyDown={(e) => {
-                  if (e.target !== e.currentTarget) return;
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    setOpenMessageId(m.id);
-                  }
-                }}
-                className={cn(
-                  "group/row flex w-full cursor-pointer items-start gap-3 px-5 py-3 text-left transition hover:bg-(--color-surface-hi)",
-                  m.unread && "bg-(--color-accent)/[0.04]",
-                )}
-              >
+                message={m}
+                onOpen={() => setOpenMessageId(m.id)}
+                onArchiveToggle={() => void toggleArchive(m)}
+                onPickMark={(mark) => void patchFlag(m.id, { mark })}
+              />
+            ))}
+          </ul>
+        )}
+      </article>
+
+      <MessageModal
+        accountId={account.id}
+        accountDisplayName={account.displayName}
+        messageId={openMessageId}
+        onClose={() => setOpenMessageId(null)}
+        onFlagsChanged={onFlagsChanged}
+        archivedId={
+          messages.find((m) => m.id === openMessageId)?.archiveId ?? null
+        }
+        onToggleArchive={() => {
+          const m = messages.find((x) => x.id === openMessageId);
+          if (m) void toggleArchive(m);
+        }}
+      />
+    </>
+  );
+}
+
+/**
+ * 메일 한 줄.
+ *
+ * 좌우 어느 쪽으로든 밀면 보관에 담고, 이미 담긴 것은 뺀다. 아이콘을 두지
+ * 않은 이유는 줄이 이미 빽빽해서다 — 보낸이·제목·시각·표식이 한 줄을 나눠 쓴다.
+ */
+function MailRow({
+  message: m,
+  onOpen,
+  onArchiveToggle,
+  onPickMark,
+}: {
+  message: MailMessage;
+  onOpen: () => void;
+  onArchiveToggle: () => void;
+  onPickMark: (mark: MessageMark | null) => void;
+}) {
+  const swipe = useSwipe(onArchiveToggle);
+  const archived = !!m.archiveId;
+
+  return (
+    <li className="relative overflow-hidden">
+      {/* 미는 동안 뒤에서 드러나는 안내 */}
+      {swipe.active && (
+        <div
+          aria-hidden
+          className={cn(
+            "pointer-events-none absolute inset-0 flex items-center justify-between px-5 text-[12px] transition-colors",
+            swipe.armed
+              ? "bg-(--color-accent-soft) text-(--color-accent-strong)"
+              : "bg-(--color-bg-2) text-(--color-fg-4)",
+          )}
+        >
+          <span className="flex items-center gap-1.5">
+            {archived ? <ArchiveX className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
+            {archived ? "보관 해제" : "보관"}
+          </span>
+          <span className="flex items-center gap-1.5">
+            {archived ? "보관 해제" : "보관"}
+            {archived ? <ArchiveX className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
+          </span>
+        </div>
+      )}
+
+      <div
+        role="button"
+        tabIndex={0}
+        {...swipe.handlers}
+        onClick={onOpen}
+        onKeyDown={(e) => {
+          if (e.target !== e.currentTarget) return;
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            onOpen();
+          }
+        }}
+        style={{
+          transform: swipe.dx ? `translateX(${swipe.dx}px)` : undefined,
+          // 미는 중에는 붙어 오게, 놓으면 제자리로 미끄러지게
+          transition: swipe.active ? undefined : "transform 160ms",
+        }}
+        className={cn(
+          "group/row relative flex w-full cursor-pointer touch-pan-y items-start gap-3 bg-(--color-surface) px-5 py-3 text-left transition-colors hover:bg-(--color-surface-hi)",
+          m.unread && "bg-(--color-accent)/[0.04]",
+        )}
+      >
                 <span
                   aria-hidden
                   className={cn(
@@ -207,36 +302,19 @@ export function InboxCard({
                   )}
                 </div>
 
-                {/* 보관 — 담겨 있으면 항상 보이고, 없으면 hover 때만 */}
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    void toggleArchive(m);
-                  }}
-                  aria-pressed={!!m.archiveId}
-                  disabled={busyArchive === m.id}
-                  className={cn(
-                    "mt-0.5 grid h-7 w-7 shrink-0 place-items-center rounded-md transition",
-                    m.archiveId
-                      ? "text-(--color-accent-strong) opacity-100"
-                      : "text-(--color-fg-4) opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 hover:text-(--color-fg-2)",
-                    busyArchive === m.id && "opacity-50",
-                  )}
-                  aria-label={m.archiveId ? "보관 해제" : "보관함에 담기"}
-                  title={m.archiveId ? "보관 해제" : "보관함에 담기"}
-                >
-                  {m.archiveId ? (
-                    <ArchiveX className="h-3.5 w-3.5" />
-                  ) : (
-                    <Archive className="h-3.5 w-3.5" />
-                  )}
-                </button>
+                {/* 보관된 것은 표식 왼쪽에 조용히 알려 준다 — 아이콘 버튼은
+                    없앴고, 담고 빼는 일은 좌우로 밀어서 한다 */}
+                {archived && (
+                  <Archive
+                    className="mt-0.5 h-3.5 w-3.5 shrink-0 text-(--color-accent-strong)"
+                    aria-label="보관됨"
+                  />
+                )}
 
                 {/* 표식 — 달려 있으면 항상 보이고, 없으면 hover 때만 */}
                 <MarkPicker
                   current={m.mark}
-                  onPick={(mark) => void patchFlag(m.id, { mark })}
+                  onPick={onPickMark}
                   className={cn(
                     "mt-0.5 transition",
                     m.mark
@@ -244,27 +322,8 @@ export function InboxCard({
                       : "opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100",
                   )}
                 />
-              </li>
-            ))}
-          </ul>
-        )}
-      </article>
-
-      <MessageModal
-        accountId={account.id}
-        accountDisplayName={account.displayName}
-        messageId={openMessageId}
-        onClose={() => setOpenMessageId(null)}
-        onFlagsChanged={onFlagsChanged}
-        archivedId={
-          messages.find((m) => m.id === openMessageId)?.archiveId ?? null
-        }
-        onToggleArchive={() => {
-          const m = messages.find((x) => x.id === openMessageId);
-          if (m) void toggleArchive(m);
-        }}
-      />
-    </>
+      </div>
+    </li>
   );
 }
 
