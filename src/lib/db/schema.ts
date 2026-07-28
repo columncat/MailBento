@@ -93,6 +93,13 @@ export const appConfig = sqliteTable("app_config", {
     .default(180),
   /** 1 = interval 도달 시 캐시 무시(force)하고 항상 새로 fetch. */
   forceOnInterval: integer("force_on_interval").notNull().default(0),
+  /**
+   * 시계 위젯에 띄울 지역 목록 JSON.
+   *
+   * 개수가 정해지지 않아 컬럼으로 쪼갤 수 없고, 값도 서로 묶여 다닌다.
+   * 비어 있으면 기본 지역(서울)을 쓴다.
+   */
+  regions: text("regions"),
   updatedAt: integer("updated_at", { mode: "timestamp" })
     .notNull()
     .default(sql`(unixepoch())`),

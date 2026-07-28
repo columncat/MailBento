@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { RegionInput } from "@/lib/regions";
 
 import {
   loadWidgetEnabled,
@@ -15,6 +16,7 @@ interface Props {
   initialWidgetState: WidgetState;
   refreshIntervalSeconds: number;
   forceOnInterval: boolean;
+  regions: RegionInput[];
   authEnabled: boolean;
   /** MEMOBENTO_URL override. null 이면 현재 호스트의 3001 포트로 유추. */
   memobentoUrl: string | null;

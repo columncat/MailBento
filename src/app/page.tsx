@@ -30,6 +30,7 @@ export default async function HomePage() {
       initialWidgetState={widgetState}
       refreshIntervalSeconds={appConfig.refreshIntervalSeconds}
       forceOnInterval={appConfig.forceOnInterval}
+      regions={appConfig.regions}
       authEnabled={isAuthEnabled()}
       memobentoUrl={env.MEMOBENTO_URL?.trim() || null}
     />

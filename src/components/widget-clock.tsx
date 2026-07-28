@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from "react";
 
-import { wttrEmoji, type Region } from "@/lib/widget-config";
+import type { Region } from "@/lib/regions";
+import { wttrEmoji } from "@/lib/widget-config";
 
 interface Weather {
   tempC: number;
@@ -89,7 +90,7 @@ export function WidgetClock({ region }: { region: Region }) {
       {/* 상단 라벨: 깃발 + 타임존 (Search 제목 행과 정렬) */}
       <div className="flex h-6 shrink-0 items-center gap-2.5">
         <span className="inline-flex shrink-0 items-center rounded-md border border-(--color-border) bg-(--color-bg-2) px-1.5 py-0.5 font-mono text-[10px] tracking-widest text-(--color-fg-2)">
-          {region.flag}
+          {region.badge}
         </span>
         <span className="min-w-0 flex-1 truncate font-mono text-[11px] tracking-[0.22em] uppercase text-(--color-fg-2)">
           {region.tzLabel}
@@ -101,7 +102,7 @@ export function WidgetClock({ region }: { region: Region }) {
         {/* 행 A (Google 높이): 도시명(좌측) / 위·경도(우측) */}
         <div className="flex min-h-0 flex-1 flex-col justify-center">
           <span className="max-w-full truncate text-left text-[15px] font-medium text-(--color-fg)">
-            {region.cityKor}
+            {region.label}
           </span>
           <span className="self-end text-right font-mono text-[10.5px] text-(--color-fg-4)">
             {region.coords}

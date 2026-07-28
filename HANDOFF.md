@@ -111,13 +111,28 @@ IMAP UID 는 메일이 지워지거나 UIDVALIDITY 가 바뀌면 더 이상 같�
 `group/row` 는 **`<li>` 에 있어야 한다** — 아이콘단이 안쪽 div 의 형제라서,
 안쪽에 두면 hover 가 걸리지 않는다.
 
-### 3.8 마이그레이션은 `when` 이 증가해야만 적용된다
+### 3.8 시계 지역은 저장 값과 파생 값을 나눈다
+
+`app_config.regions` 에 들어가는 것은 **이름 · 배지 · 위경도 · 표준시 · 단위 · 로케일**
+뿐이다. 좌표 표기·표준시 라벨·날씨 조회 키는 `toRegion` 이 그릴 때 만든다. 손으로 적게
+두면 위경도를 옮겼을 때 표기만 옛 값으로 남고, 서머타임이 바뀌어도 라벨이 안 따라온다.
+
+`DEFAULT_REGIONS` 는 예전에 하드코딩돼 있던 두 곳(서울·West Lafayette) 그대로다.
+**한 곳으로 줄이면 이미 쓰던 사람의 두 번째 시계가 업데이트만으로 말없이 사라진다.**
+
+`normalizeRegions` 는 깨진 항목만 버리고 나머지는 살린다 — 하나 틀렸다고 전체를
+기본값으로 되돌리면 다른 지역 설정까지 함께 날아간다.
+
+예전 `widget-config.ts` 에는 `mapImage` / `markerX` / `markerY` 필드가 있었는데
+**어디서도 그리지 않는 죽은 코드**였다. 지도를 갈아 끼워야 할 것처럼 보이지만 아니다.
+
+### 3.9 마이그레이션은 `when` 이 증가해야만 적용된다
 
 `drizzle/meta/_journal.json` 의 `when` 이 마지막 적용값 이하이면 drizzle 은 **예외 없이
 조용히 건너뛴다.** `npm run db:generate` 후 새 항목의 `when` 을 눈으로 확인할 것.
 `drizzle/` 는 커밋 대상이다.
 
-### 3.9 Dockerfile 의 `ENCRYPTION_KEY` 는 빌드 단계 더미다
+### 3.10 Dockerfile 의 `ENCRYPTION_KEY` 는 빌드 단계 더미다
 
 빌드 시점에만 필요해서 넣어 둔 값이고 **런타임 스테이지에는 없다**. 실제 값은
 컨테이너 환경변수로 주입한다. 이미지에 시크릿은 들어가지 않는다.
@@ -131,6 +146,7 @@ IMAP UID 는 메일이 지워지거나 UIDVALIDITY 가 바뀌면 더 이상 같�
 | 메일 목록에 새 표시 얹기 | `providers/types.ts` 의 `MailMessage` → `api/mail/route.ts` 의 `withFlags` → `inbox-card.tsx` |
 | 보관 사본에 컬럼 추가 | `db/schema.ts` → `archive-server.ts`(Summary/Detail/values) → **export/import** |
 | 위젯 추가 | `components/widget-*.tsx` → `widget-side-wing.tsx` 또는 `dashboard.tsx` 배치 |
+| 시계 지역에 항목 추가 | `lib/regions.ts` 의 `RegionInput` → `normalizeRegions` → `settings/regions-setting.tsx` 입력칸. 파생 값이면 `toRegion` 에만 |
 | 화면 색·글꼴 | `app/globals.css`. 인라인 style 로만 쓰는 변수는 `:root` 에 둘 것 |
 
 ---

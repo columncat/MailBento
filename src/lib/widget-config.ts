@@ -1,79 +1,12 @@
 /**
- * 위젯 헤더 설정 — 지역 (시계/날씨) + 주식.
- * 향후 사용자 편집 가능하게 확장할 수 있도록 한 곳에 모아둠.
+ * 날씨 코드 → 이모지.
+ *
+ * 지역 목록은 여기 있지 않다 — 설정에서 편집하고 app_config 에 저장한다
+ * (lib/regions.ts). 예전에는 이 파일에 하드코딩된 배열이었고, 나라별 지도
+ * 이미지와 손으로 계산한 마커 좌표까지 들고 있었지만 어디에서도 그리지 않는
+ * 죽은 값이었다.
  */
 
-export interface Region {
-  key: string;
-  flag: string;
-  city: string;
-  cityKor: string;
-  tz: string;
-  /** 상단 라벨 (예: "KST +9", "EST -4"). */
-  tzLabel: string;
-  locale: string;
-  lat: number;
-  lng: number;
-  coords: string;
-  /** wttr.in 위치 query — 영문/도시명. */
-  weatherQuery: string;
-  /** 온도 단위. */
-  unit: "C" | "F";
-  /** 외부 국가 지도 이미지 URL (Wikimedia Commons location map). */
-  mapImage: string;
-  /** 마커 위치 (지도 이미지 가로/세로 비율 0~1). */
-  markerX: number;
-  markerY: number;
-}
-
-// Wikimedia Commons Special:FilePath — 해시 없이 안정적으로 원본으로 리다이렉트.
-const KR_MAP =
-  "https://commons.wikimedia.org/wiki/Special:FilePath/South_Korea_location_map.svg";
-const US_MAP =
-  "https://commons.wikimedia.org/wiki/Special:FilePath/Usa_edcp_location_map.svg";
-
-export const REGIONS: Region[] = [
-  {
-    key: "seoul",
-    flag: "KR",
-    city: "Seoul",
-    cityKor: "서울",
-    tz: "Asia/Seoul",
-    tzLabel: "KST +9",
-    locale: "ko-KR",
-    lat: 37.5665,
-    lng: 126.978,
-    coords: "37.5°N · 127.0°E",
-    weatherQuery: "Seoul",
-    unit: "C",
-    mapImage: KR_MAP,
-    // South Korea location map bounds: top 39.0 / bottom 33.0 / left 124.5 / right 130.0
-    // Seoul 37.57N,126.98E → x=(126.98-124.5)/5.5, y=(39.0-37.57)/6.0
-    markerX: 0.451,
-    markerY: 0.239,
-  },
-  {
-    key: "lafayette",
-    flag: "US",
-    city: "West Lafayette",
-    cityKor: "West Lafayette, IN",
-    tz: "America/Indiana/Indianapolis",
-    tzLabel: "EST -4",
-    locale: "en-US",
-    lat: 40.4259,
-    lng: -86.9081,
-    coords: "40.4°N · 86.9°W",
-    weatherQuery: "West+Lafayette",
-    unit: "F",
-    mapImage: US_MAP,
-    // Usa_edcp location map bounds: top 49.38 / bottom 24.94 / left -124.85 / right -66.89
-    // W.Lafayette 40.43N,86.91W → x=(-86.91+124.85)/57.96, y=(49.38-40.43)/24.44
-    markerX: 0.655,
-    markerY: 0.366,
-  },
-];
-
-/** wttr.in weather code → emoji */
 export function wttrEmoji(code: string | number, isDay: boolean): string {
   const c = typeof code === "string" ? parseInt(code, 10) : code;
   if (Number.isNaN(c)) return "·";

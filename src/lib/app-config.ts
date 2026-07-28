@@ -1,6 +1,21 @@
 import { eq } from "drizzle-orm";
 
 import { db, schema } from "./db";
+import {
+  DEFAULT_REGIONS,
+  normalizeRegions,
+  type RegionInput,
+} from "./regions";
+
+/** 컬럼에 든 JSON 을 안전한 목록으로. 깨졌으면 기본값. */
+function parseRegions(raw: string | null): RegionInput[] {
+  if (!raw) return DEFAULT_REGIONS;
+  try {
+    return normalizeRegions(JSON.parse(raw));
+  } catch {
+    return DEFAULT_REGIONS;
+  }
+}
 
 const ROW_ID = 1;
 
@@ -11,12 +26,15 @@ export interface AppConfig {
   refreshIntervalSeconds: number;
   /** true = interval 도달 시 캐시 무시(force)하고 항상 새로 fetch. */
   forceOnInterval: boolean;
+  /** 시계 위젯 지역 목록. */
+  regions: RegionInput[];
 }
 
 const DEFAULTS: AppConfig = {
   mailCacheSeconds: 60,
   refreshIntervalSeconds: 180,
   forceOnInterval: false,
+  regions: DEFAULT_REGIONS,
 };
 
 export function getAppConfig(): AppConfig {
@@ -30,6 +48,7 @@ export function getAppConfig(): AppConfig {
     mailCacheSeconds: row.mailCacheSeconds,
     refreshIntervalSeconds: row.refreshIntervalSeconds,
     forceOnInterval: row.forceOnInterval === 1,
+    regions: parseRegions(row.regions),
   };
 }
 
@@ -47,6 +66,10 @@ export function setAppConfig(input: Partial<AppConfig>): AppConfig {
       3600,
     ),
     forceOnInterval: input.forceOnInterval ?? cur.forceOnInterval,
+    regions:
+      input.regions === undefined
+        ? cur.regions
+        : normalizeRegions(input.regions),
   };
   db.insert(schema.appConfig)
     .values({
@@ -54,6 +77,7 @@ export function setAppConfig(input: Partial<AppConfig>): AppConfig {
       mailCacheSeconds: next.mailCacheSeconds,
       refreshIntervalSeconds: next.refreshIntervalSeconds,
       forceOnInterval: next.forceOnInterval ? 1 : 0,
+      regions: JSON.stringify(next.regions),
     })
     .onConflictDoUpdate({
       target: schema.appConfig.id,
@@ -61,6 +85,7 @@ export function setAppConfig(input: Partial<AppConfig>): AppConfig {
         mailCacheSeconds: next.mailCacheSeconds,
         refreshIntervalSeconds: next.refreshIntervalSeconds,
         forceOnInterval: next.forceOnInterval ? 1 : 0,
+        regions: JSON.stringify(next.regions),
         updatedAt: new Date(),
       },
     })

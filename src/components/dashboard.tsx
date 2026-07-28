@@ -46,6 +46,7 @@ import { WidgetFoldersWing } from "./widget-folders-wing";
 import { WidgetHeader } from "./widget-header";
 import { WidgetSideWing } from "./widget-side-wing";
 import type { ArchivedSummary } from "@/lib/archive-server";
+import type { RegionInput } from "@/lib/regions";
 import { MessageModal } from "./message-modal";
 
 export interface AccountSummary {
@@ -76,6 +77,7 @@ export function Dashboard({
   initialWidgetState,
   refreshIntervalSeconds,
   forceOnInterval,
+  regions,
   widgetEnabled,
   onWidgetToggle,
   memobentoUrl,
@@ -84,6 +86,8 @@ export function Dashboard({
   initialWidgetState: WidgetState;
   refreshIntervalSeconds: number;
   forceOnInterval: boolean;
+  /** 시계 위젯 지역 (설정에서 편집). */
+  regions: RegionInput[];
   widgetEnabled: boolean;
   onWidgetToggle: (v: boolean) => void;
   /** MEMOBENTO_URL override. null 이면 현재 호스트의 3001 포트로 유추. */
@@ -465,7 +469,7 @@ export function Dashboard({
             }}
           >
             <div ref={headerRef} className="min-w-0">
-              <WidgetHeader />
+              <WidgetHeader regions={regions} />
             </div>
             <div style={{ height: headerH }}>
               <WidgetFoldersWing
@@ -492,7 +496,7 @@ export function Dashboard({
         ) : (
           <div className="flex flex-col gap-5">
             <div ref={headerRef}>
-              <WidgetHeader />
+              <WidgetHeader regions={regions} />
             </div>
             <WidgetFoldersWing
               folders={widgetState.folders}

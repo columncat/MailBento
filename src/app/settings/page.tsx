@@ -9,6 +9,7 @@ import { db, schema } from "@/lib/db";
 import { AccountActions } from "./account-actions";
 import { MailFetchSettings } from "./mail-cache-setting";
 import { PreferencesPanel } from "./preferences-panel";
+import { RegionsSetting } from "./regions-setting";
 import { SettingsIO } from "./settings-io";
 
 export const dynamic = "force-dynamic";
@@ -139,6 +140,15 @@ export default async function SettingsPage({
 
       {/* 메일 가져오기 (캐시/주기/강제) */}
       <MailFetchSettings initial={appConfig} />
+
+      {/* 시계 위젯 지역 */}
+      <section className="rounded-[var(--radius-card)] bg-(--color-surface) p-6 ring-1 ring-(--color-border-soft)">
+        <h2 className="mb-1 text-lg font-medium text-(--color-fg)">시계 지역</h2>
+        <p className="mb-4 text-sm text-(--color-fg-4)">
+          위젯 헤더의 시계·날씨에 띄울 곳입니다.
+        </p>
+        <RegionsSetting initial={appConfig.regions} />
+      </section>
 
       {/* 표시 설정 */}
       <PreferencesPanel />

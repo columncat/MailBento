@@ -14,6 +14,8 @@ const bodySchema = z.object({
   mailCacheSeconds: z.number().int().min(0).max(3600).optional(),
   refreshIntervalSeconds: z.number().int().min(15).max(3600).optional(),
   forceOnInterval: z.boolean().optional(),
+  /** 지역 목록. 서버에서 정규화하므로 형태는 느슨하게 받는다. */
+  regions: z.array(z.unknown()).optional(),
 });
 
 export async function PUT(req: Request) {
@@ -24,7 +26,7 @@ export async function PUT(req: Request) {
     const msg = e instanceof Error ? e.message : "invalid body";
     return NextResponse.json({ error: msg }, { status: 400 });
   }
-  const saved = setAppConfig(body);
+  const saved = setAppConfig(body as Parameters<typeof setAppConfig>[0]);
   invalidateMailCache(); // 새 TTL 즉시 반영
   return NextResponse.json(saved);
 }
