@@ -201,8 +201,9 @@ export function InboxCard({
 /**
  * 메일 한 줄.
  *
- * 오른쪽 끝에 표식과 보관을 세로로 쌓는다. 가로로 늘어놓으면 보낸이·제목이
- * 그만큼 밀린다 — 줄에서 정작 읽어야 하는 것이 그 둘이다.
+ * 오른쪽 끝에 표식과 보관을 세로로 쌓되 흐름에서 빼 둔다. 그대로 두면 두
+ * 아이콘(24+24+간격)이 글자보다 키가 커서 줄 높이를 끌어올린다 — 목록이
+ * 통째로 성겨진다. 그만큼 오른쪽 여백을 비워 글자와 겹치지도 않게 한다.
  */
 function MailRow({
   message: m,
@@ -220,7 +221,7 @@ function MailRow({
   const archived = !!m.archiveId;
 
   return (
-    <li>
+    <li className="group/row relative">
       <div
         role="button"
         tabIndex={0}
@@ -233,14 +234,14 @@ function MailRow({
           }
         }}
         className={cn(
-          "group/row flex w-full cursor-pointer items-start gap-3 px-5 py-3 text-left transition hover:bg-(--color-surface-hi)",
+          "flex w-full cursor-pointer items-start gap-2 py-1.5 pr-8 pl-3.5 text-left transition hover:bg-(--color-surface-hi)",
           m.unread && "bg-(--color-accent)/[0.04]",
         )}
       >
                 <span
                   aria-hidden
                   className={cn(
-                    "mt-2 h-1.5 w-1.5 shrink-0 rounded-full",
+                    "mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full",
                     m.unread ? "bg-(--color-accent)" : "bg-transparent",
                   )}
                 />
@@ -275,44 +276,45 @@ function MailRow({
                   )}
                 </div>
 
-                {/* 표식 위, 보관 아래로 쌓는다 */}
-                <div className="mt-0.5 flex shrink-0 flex-col items-center gap-1">
-                  {/* 달려 있으면 항상 보이고, 없으면 hover 때만 */}
-                  <MarkPicker
-                    current={m.mark}
-                    onPick={onPickMark}
-                    className={cn(
-                      "transition",
-                      m.mark
-                        ? "opacity-100"
-                        : "opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100",
-                    )}
-                  />
-                  <button
-                    type="button"
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onArchiveToggle();
-                    }}
-                    aria-pressed={archived}
-                    disabled={busy}
-                    className={cn(
-                      "grid h-7 w-7 place-items-center rounded-md transition",
-                      archived
-                        ? "text-(--color-accent-strong) opacity-100"
-                        : "text-(--color-fg-4) opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 hover:text-(--color-fg-2)",
-                      busy && "opacity-50",
-                    )}
-                    aria-label={archived ? "보관 해제" : "보관함에 담기"}
-                    title={archived ? "보관 해제" : "보관함에 담기"}
-                  >
-                    {archived ? (
-                      <ArchiveX className="h-3.5 w-3.5" />
-                    ) : (
-                      <Archive className="h-3.5 w-3.5" />
-                    )}
-                  </button>
-                </div>
+      </div>
+
+      {/* 표식 위, 보관 아래. 줄 높이를 늘리지 않도록 띄워 둔다. */}
+      <div className="absolute top-1/2 right-0.5 flex -translate-y-1/2 flex-col items-center gap-0.5">
+        {/* 값이 있으면 항상 보이고, 없으면 hover 때만 */}
+        <MarkPicker
+          current={m.mark}
+          onPick={onPickMark}
+          className={cn(
+            "transition",
+            m.mark
+              ? "opacity-100"
+              : "opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100",
+          )}
+        />
+        <button
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            onArchiveToggle();
+          }}
+          aria-pressed={archived}
+          disabled={busy}
+          className={cn(
+            "grid h-6 w-6 place-items-center rounded-md transition",
+            archived
+              ? "text-(--color-accent-strong) opacity-100"
+              : "text-(--color-fg-4) opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 hover:text-(--color-fg-2)",
+            busy && "opacity-50",
+          )}
+          aria-label={archived ? "보관 해제" : "보관함에 담기"}
+          title={archived ? "보관 해제" : "보관함에 담기"}
+        >
+          {archived ? (
+            <ArchiveX className="h-3.5 w-3.5" />
+          ) : (
+            <Archive className="h-3.5 w-3.5" />
+          )}
+        </button>
       </div>
     </li>
   );
@@ -324,7 +326,7 @@ function LoadingBody() {
       {Array.from({ length: 6 }).map((_, i) => (
         <li
           key={i}
-          className="flex items-start gap-3 px-5 py-3"
+          className="flex items-start gap-2 py-1.5 pr-8 pl-3.5"
           style={{ opacity: 1 - i * 0.12 }}
         >
           <span className="mt-2 h-1.5 w-1.5 shrink-0 rounded-full bg-(--color-border)" />
