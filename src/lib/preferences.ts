@@ -16,7 +16,7 @@ export const DEFAULT_THEME: ThemeKey = "forest";
 
 export const MODES = ["dark", "light"] as const;
 export type ModePref = (typeof MODES)[number];
-export const DEFAULT_MODE: ModePref = "dark";
+export const DEFAULT_MODE: ModePref = "light";
 
 export const COLUMNS = ["auto", "1", "2", "3", "4"] as const;
 export type ColumnsPref = (typeof COLUMNS)[number];
