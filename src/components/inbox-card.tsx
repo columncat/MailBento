@@ -12,7 +12,6 @@ import { useState } from "react";
 
 import type { MessageMark, Provider } from "@/lib/db/schema";
 import type { MailMessage } from "@/lib/providers/types";
-import { useSwipe } from "@/lib/use-swipe";
 import { cn, formatRelativeTime } from "@/lib/utils";
 
 import { MarkPicker } from "./message-mark";
@@ -174,6 +173,7 @@ export function InboxCard({
                 onOpen={() => setOpenMessageId(m.id)}
                 onArchiveToggle={() => void toggleArchive(m)}
                 onPickMark={(mark) => void patchFlag(m.id, { mark })}
+                busy={busyArchive === m.id}
               />
             ))}
           </ul>
@@ -201,51 +201,29 @@ export function InboxCard({
 /**
  * 메일 한 줄.
  *
- * 좌우 어느 쪽으로든 밀면 보관에 담고, 이미 담긴 것은 뺀다. 아이콘을 두지
- * 않은 이유는 줄이 이미 빽빽해서다 — 보낸이·제목·시각·표식이 한 줄을 나눠 쓴다.
+ * 오른쪽 끝에 표식과 보관을 세로로 쌓는다. 가로로 늘어놓으면 보낸이·제목이
+ * 그만큼 밀린다 — 줄에서 정작 읽어야 하는 것이 그 둘이다.
  */
 function MailRow({
   message: m,
   onOpen,
   onArchiveToggle,
   onPickMark,
+  busy,
 }: {
   message: MailMessage;
   onOpen: () => void;
   onArchiveToggle: () => void;
   onPickMark: (mark: MessageMark | null) => void;
+  busy: boolean;
 }) {
-  const swipe = useSwipe(onArchiveToggle);
   const archived = !!m.archiveId;
 
   return (
-    <li className="relative overflow-hidden">
-      {/* 미는 동안 뒤에서 드러나는 안내 */}
-      {swipe.active && (
-        <div
-          aria-hidden
-          className={cn(
-            "pointer-events-none absolute inset-0 flex items-center justify-between px-5 text-[12px] transition-colors",
-            swipe.armed
-              ? "bg-(--color-accent-soft) text-(--color-accent-strong)"
-              : "bg-(--color-bg-2) text-(--color-fg-4)",
-          )}
-        >
-          <span className="flex items-center gap-1.5">
-            {archived ? <ArchiveX className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
-            {archived ? "보관 해제" : "보관"}
-          </span>
-          <span className="flex items-center gap-1.5">
-            {archived ? "보관 해제" : "보관"}
-            {archived ? <ArchiveX className="h-4 w-4" /> : <Archive className="h-4 w-4" />}
-          </span>
-        </div>
-      )}
-
+    <li>
       <div
         role="button"
         tabIndex={0}
-        {...swipe.handlers}
         onClick={onOpen}
         onKeyDown={(e) => {
           if (e.target !== e.currentTarget) return;
@@ -254,13 +232,8 @@ function MailRow({
             onOpen();
           }
         }}
-        style={{
-          transform: swipe.dx ? `translateX(${swipe.dx}px)` : undefined,
-          // 미는 중에는 붙어 오게, 놓으면 제자리로 미끄러지게
-          transition: swipe.active ? undefined : "transform 160ms",
-        }}
         className={cn(
-          "group/row relative flex w-full cursor-pointer touch-pan-y items-start gap-3 bg-(--color-surface) px-5 py-3 text-left transition-colors hover:bg-(--color-surface-hi)",
+          "group/row flex w-full cursor-pointer items-start gap-3 px-5 py-3 text-left transition hover:bg-(--color-surface-hi)",
           m.unread && "bg-(--color-accent)/[0.04]",
         )}
       >
@@ -302,26 +275,44 @@ function MailRow({
                   )}
                 </div>
 
-                {/* 보관된 것은 표식 왼쪽에 조용히 알려 준다 — 아이콘 버튼은
-                    없앴고, 담고 빼는 일은 좌우로 밀어서 한다 */}
-                {archived && (
-                  <Archive
-                    className="mt-0.5 h-3.5 w-3.5 shrink-0 text-(--color-accent-strong)"
-                    aria-label="보관됨"
+                {/* 표식 위, 보관 아래로 쌓는다 */}
+                <div className="mt-0.5 flex shrink-0 flex-col items-center gap-1">
+                  {/* 달려 있으면 항상 보이고, 없으면 hover 때만 */}
+                  <MarkPicker
+                    current={m.mark}
+                    onPick={onPickMark}
+                    className={cn(
+                      "transition",
+                      m.mark
+                        ? "opacity-100"
+                        : "opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100",
+                    )}
                   />
-                )}
-
-                {/* 표식 — 달려 있으면 항상 보이고, 없으면 hover 때만 */}
-                <MarkPicker
-                  current={m.mark}
-                  onPick={onPickMark}
-                  className={cn(
-                    "mt-0.5 transition",
-                    m.mark
-                      ? "opacity-100"
-                      : "opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100",
-                  )}
-                />
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onArchiveToggle();
+                    }}
+                    aria-pressed={archived}
+                    disabled={busy}
+                    className={cn(
+                      "grid h-7 w-7 place-items-center rounded-md transition",
+                      archived
+                        ? "text-(--color-accent-strong) opacity-100"
+                        : "text-(--color-fg-4) opacity-0 group-hover/row:opacity-100 focus-visible:opacity-100 hover:text-(--color-fg-2)",
+                      busy && "opacity-50",
+                    )}
+                    aria-label={archived ? "보관 해제" : "보관함에 담기"}
+                    title={archived ? "보관 해제" : "보관함에 담기"}
+                  >
+                    {archived ? (
+                      <ArchiveX className="h-3.5 w-3.5" />
+                    ) : (
+                      <Archive className="h-3.5 w-3.5" />
+                    )}
+                  </button>
+                </div>
       </div>
     </li>
   );
