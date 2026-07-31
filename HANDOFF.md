@@ -126,13 +126,30 @@ IMAP UID 는 메일이 지워지거나 UIDVALIDITY 가 바뀌면 더 이상 같�
 예전 `widget-config.ts` 에는 `mapImage` / `markerX` / `markerY` 필드가 있었는데
 **어디서도 그리지 않는 죽은 코드**였다. 지도를 갈아 끼워야 할 것처럼 보이지만 아니다.
 
-### 3.9 마이그레이션은 `when` 이 증가해야만 적용된다
+### 3.9 route handler 의 리다이렉트는 상대 경로로 준다
+
+`NextResponse.redirect(new URL("/login", req.url))` 은 **쓰지 않는다**.
+standalone 빌드의 route handler 에서 `req.url` 의 오리진은 요청의 Host 가 아니라
+서버가 바인드한 주소로 채워진다. Dockerfile 이 `HOSTNAME=0.0.0.0` 이므로 그대로
+절대 URL 을 만들면 `Location: http://0.0.0.0:3000/login` 이 나가고 브라우저가
+거기로 끌려간다. Host 헤더를 무엇으로 주든 똑같다.
+
+미들웨어는 증상이 없다 — Next 가 같은 오리진이면 상대 경로로 정규화해 준다.
+그래서 **route handler 에서만** 터지고, 그중에서도 세션 만료 후 자동 갱신
+(`/api/auth/auto-renew`)과 로그아웃에서만 지나가므로 "가끔" 처럼 보인다.
+
+`lib/redirect.ts` 의 `redirectTo()` 를 쓸 것. Location 은 상대 경로여도 되고
+(RFC 9110 §10.2.2) 브라우저가 현재 오리진 기준으로 풀어 주므로 LAN·Tailscale·
+리버스 프록시 어디로 들어왔든 따라온다. Host 헤더를 믿고 오리진을 되짜맞추는
+방법도 있지만 그건 헤더 위조로 열린 리다이렉트가 되는 길을 새로 여는 셈이다.
+
+### 3.10 마이그레이션은 `when` 이 증가해야만 적용된다
 
 `drizzle/meta/_journal.json` 의 `when` 이 마지막 적용값 이하이면 drizzle 은 **예외 없이
 조용히 건너뛴다.** `npm run db:generate` 후 새 항목의 `when` 을 눈으로 확인할 것.
 `drizzle/` 는 커밋 대상이다.
 
-### 3.10 Dockerfile 의 `ENCRYPTION_KEY` 는 빌드 단계 더미다
+### 3.11 Dockerfile 의 `ENCRYPTION_KEY` 는 빌드 단계 더미다
 
 빌드 시점에만 필요해서 넣어 둔 값이고 **런타임 스테이지에는 없다**. 실제 값은
 컨테이너 환경변수로 주입한다. 이미지에 시크릿은 들어가지 않는다.

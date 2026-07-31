@@ -1,5 +1,5 @@
 import { cookies, headers } from "next/headers";
-import { NextResponse, type NextRequest } from "next/server";
+import { type NextRequest } from "next/server";
 
 import {
   encryptSession,
@@ -15,21 +15,22 @@ import {
   nowSeconds,
   sessionCookieOptions,
 } from "@/lib/auth";
+import { redirectTo } from "@/lib/redirect";
 
 export async function GET(req: NextRequest) {
   if (!isAuthEnabled()) {
-    return NextResponse.redirect(new URL("/", req.url));
+    return redirectTo("/");
   }
 
   const cookieStore = await cookies();
   const rememberToken = cookieStore.get(REMEMBER_COOKIE_NAME)?.value;
   if (!rememberToken) {
-    return NextResponse.redirect(new URL("/login", req.url));
+    return redirectTo("/login");
   }
 
   const verified = await verifySession(rememberToken);
   if (!verified) {
-    return NextResponse.redirect(new URL("/login", req.url));
+    return redirectTo("/login");
   }
 
   // DB 에 "auto" 로그인 기록
@@ -53,5 +54,5 @@ export async function GET(req: NextRequest) {
   // 원래 가려던 URL 로 복귀 (오픈 리다이렉트 방지 — same-origin 체크)
   const to = req.nextUrl.searchParams.get("to") || "/";
   const safeTo = to.startsWith("/") && !to.startsWith("//") ? to : "/";
-  return NextResponse.redirect(new URL(safeTo, req.url));
+  return redirectTo(safeTo);
 }
