@@ -93,6 +93,30 @@ docker compose up -d --build
 - DB 는 `./data` 볼륨에 영속화되어 재배포해도 계정·위젯·보관함이 유지됩니다.
 - 시크릿은 이미지에 포함되지 않고 `.env.local` 로 런타임 주입됩니다.
 
+## 에이전트 연동 (MCP)
+
+메일함·메일·보관함에 에이전트가 접근할 수 있게 하는 MCP 서버가 [`mcp/`](mcp/) 에 있습니다.
+같은 호스트·같은 내부망·SSH 어느 쪽에서든 붙습니다.
+
+```bash
+cd mcp && npm install && npm run build
+```
+
+```json
+{
+  "mcpServers": {
+    "mailbento": {
+      "command": "node",
+      "args": ["/path/to/MailBento/mcp/dist/index.js"],
+      "env": { "MAILBENTO_URL": "http://127.0.0.1:3000", "MAILBENTO_PASSWORD": "…" }
+    }
+  }
+}
+```
+
+읽기·표식·보관이 전부이고 **메일을 보내거나 지우지는 않습니다.** 자세한 것은
+[mcp/README.md](mcp/README.md) 를 보세요.
+
 ## 자매 앱
 
 [MemoBento](https://github.com/columncat/MemoBento) — 메모·파일 대시보드.

@@ -24,3 +24,6 @@ Thumbs.db
 *.tsbuildinfo
 README.md
 .claude
+
+# MCP 서버 — 앱 이미지와 무관하다
+mcp
