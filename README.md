@@ -74,6 +74,7 @@ npm run dev
 | `AUTH_PASSWORD` | (없음) | plaintext 또는 bcrypt 해시. 비우면 인증 끔 |
 | `AUTH_SECRET` | (없음) | 세션 쿠키 암호화 키 (32바이트 base64) |
 | `MEMOBENTO_URL` | (없음) | 헤더의 MemoBento 버튼 주소. 비우면 자동 유추 |
+| `AGENT_URL` · `AGENT_TOKEN` | (없음) | 에이전트 채팅 (아래 참고) |
 
 ```bash
 openssl rand -base64 32   # ENCRYPTION_KEY / AUTH_SECRET 생성
@@ -121,6 +122,19 @@ cd mcp && npm install && npm run build
 
 [MemoBento](https://github.com/columncat/MemoBento) — 메모·파일 대시보드.
 나란히 띄우면 Memo · Corkboard 위젯을 양쪽에서 함께 편집할 수 있습니다.
+
+## 에이전트와 대화 (선택)
+
+[BentoAgent](https://github.com/columncat/BentoAgent) 를 띄워 두면 우상단에 **대화**
+버튼이 생깁니다. Discord 에서 하던 대화와 **같은 대화**라 창구를 옮겨도 맥락이 이어집니다.
+
+```bash
+AGENT_URL=http://127.0.0.1:4000
+AGENT_TOKEN=…
+```
+
+둘 다 채워야 버튼이 뜹니다. 브라우저가 에이전트를 직접 부르지 않고 이 앱이 서버에서
+프록시하므로 토큰은 화면에 실리지 않고, 이미 있는 로그인이 그대로 경계가 됩니다.
 
 ## 문서
 

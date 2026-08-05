@@ -39,6 +39,7 @@ import {
   type WidgetState,
 } from "@/lib/widget-storage";
 
+import { AgentChat } from "./agent-chat";
 import { MemoBentoLink } from "./cross-app-link";
 import { InboxCard } from "./inbox-card";
 import { SortableInboxCard } from "./sortable-inbox-card";
@@ -400,6 +401,7 @@ export function Dashboard({
         </div>
 
         <div className="flex items-center gap-2">
+          <AgentChat />
           <MemoBentoLink href={memobentoUrl} />
           <button
             type="button"
