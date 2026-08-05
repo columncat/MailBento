@@ -101,7 +101,7 @@ export function AgentChat() {
         onClick={() => setOpen((v) => !v)}
         className="flex items-center gap-2 rounded-full bg-(--color-surface) px-4 py-2 text-sm text-(--color-fg-2) ring-1 ring-(--color-border-soft) transition hover:bg-(--color-surface-2)"
         aria-label="에이전트와 대화"
-        title="에이전트와 대화 — Discord 와 같은 대화입니다"
+        title="에이전트와 대화 — 메일함과 메모함 권한이 있습니다"
       >
         <Sparkles className="h-4 w-4" />
         대화
@@ -123,8 +123,8 @@ export function AgentChat() {
                 <span className="truncate text-sm font-medium text-(--color-fg)">
                   에이전트
                 </span>
-                <span className="shrink-0 text-[11px] text-(--color-fg-4)">
-                  Discord 와 같은 대화
+                <span className="shrink-0 text-[11px] break-keep text-(--color-fg-4)">
+                  메일함과 메모함 권한이 있습니다
                 </span>
               </div>
               <div className="flex shrink-0 items-center gap-1">
