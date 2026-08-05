@@ -60,9 +60,24 @@ async function forward(path: string, body?: unknown) {
   }
 }
 
-/** 에이전트가 설정돼 있는지. 화면이 버튼을 보일지 정하는 데 쓴다. */
+/**
+ * 버튼을 보일지 정하는 데 쓴다.
+ *
+ * 환경변수만 보지 않고 실제로 닿는지까지 확인한다. 설정은 돼 있는데 에이전트가
+ * 떠 있지 않으면 버튼이 보이고 눌렀을 때만 실패하는데, 그건 없느니만 못하다.
+ */
 export async function GET() {
-  return NextResponse.json({ configured: !!AGENT_URL && !!AGENT_TOKEN });
+  if (!AGENT_URL || !AGENT_TOKEN) return NextResponse.json({ configured: false });
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 2000);
+  try {
+    const res = await fetch(new URL("/health", AGENT_URL), { signal: ctl.signal });
+    return NextResponse.json({ configured: res.ok });
+  } catch {
+    return NextResponse.json({ configured: false });
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export async function POST(req: Request) {
