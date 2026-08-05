@@ -1,3 +1,4 @@
+import { safePath } from "@/lib/redirect";
 import { Mail } from "lucide-react";
 
 import { isAuthEnabled } from "@/lib/auth";
@@ -16,7 +17,7 @@ export default async function LoginPage({
     redirect("/");
   }
   const { from } = await searchParams;
-  const to = from && from.startsWith("/") && !from.startsWith("//") ? from : "/";
+  const to = safePath(from);
 
   return (
     <main className="relative mx-auto flex min-h-screen max-w-[400px] flex-col items-center justify-center gap-6 px-6 py-10">

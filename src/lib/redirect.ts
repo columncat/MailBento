@@ -22,7 +22,22 @@ export function redirectTo(
   path: string,
   status: 303 | 307 = 307,
 ): NextResponse {
-  // 프로토콜 상대(`//evil.com`)는 다른 사이트로 나간다
-  const safe = path.startsWith("/") && !path.startsWith("//") ? path : "/";
+  const safe = safePath(path);
   return new NextResponse(null, { status, headers: { Location: safe } });
+}
+
+/**
+ * 같은 오리진 안의 경로인가.
+ *
+ * `//evil.com` 은 프로토콜 상대 URL 이라 다른 사이트로 나간다. 그리고 브라우저는
+ * **역슬래시를 슬래시처럼 읽으므로** `/\evil.com` 도 마찬가지다 — 슬래시만
+ * 막으면 샌다. 로그인 직후로 리다이렉트되는 자리라, 가장 믿기 쉬운 순간에
+ * 남의 사이트로 보내진다.
+ *
+ * 그래서 "슬래시로 시작하고, 두 번째 글자가 슬래시도 역슬래시도 아닌 것" 만 통과시킨다.
+ */
+export function safePath(path: string | null | undefined): string {
+  if (!path) return "/";
+  if (path === "/") return "/";
+  return /^\/[^/\\]/.test(path) ? path : "/";
 }

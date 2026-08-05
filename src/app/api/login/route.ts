@@ -16,6 +16,11 @@ import {
   verifyPassword,
 } from "@/lib/auth";
 import { encryptSession } from "@/lib/auth-crypto";
+import {
+  checkLoginAllowed,
+  noteLoginFailure,
+  noteLoginSuccess,
+} from "@/lib/login-throttle";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -51,6 +56,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, authDisabled: true });
   }
 
+  // 횟수로 막는다. 지연만으로는 동시 요청이 겹쳐 사라진다.
+  const gate = checkLoginAllowed(req);
+  if (!gate.ok) {
+    return NextResponse.json(
+      { error: `시도가 너무 많습니다. ${gate.retryAfter}초 뒤에 다시 시도하세요.` },
+      { status: 429, headers: { "retry-after": String(gate.retryAfter) } },
+    );
+  }
+
   const parsed = bodySchema.safeParse(await req.json().catch(() => null));
   if (!parsed.success) {
     return NextResponse.json({ error: "비밀번호가 필요합니다" }, { status: 400 });
@@ -64,6 +78,7 @@ export async function POST(req: Request) {
     } catch {
       /* 기록 실패가 응답을 바꾸면 안 된다 */
     }
+    noteLoginFailure(req);
     await new Promise((r) => setTimeout(r, FAIL_DELAY_MS));
     return NextResponse.json(
       { error: "비밀번호가 틀렸습니다" },
@@ -76,6 +91,8 @@ export async function POST(req: Request) {
   } catch {
     /* */
   }
+
+  noteLoginSuccess(req);
 
   const remember = parsed.data.remember ?? false;
   const now = nowSeconds();

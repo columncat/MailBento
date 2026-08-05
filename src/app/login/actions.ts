@@ -1,5 +1,6 @@
 "use server";
 
+import { safePath } from "@/lib/redirect";
 import { cookies, headers } from "next/headers";
 import { redirect } from "next/navigation";
 
@@ -87,7 +88,7 @@ export async function loginAction(
   }
 
   // same-origin 체크
-  const safeTo = to.startsWith("/") && !to.startsWith("//") ? to : "/";
+  const safeTo = safePath(to);
   redirect(safeTo);
 }
 

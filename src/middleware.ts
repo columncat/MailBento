@@ -61,6 +61,16 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  // 정적 자산은 매칭 제외
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)).*)"],
+  /*
+   * 확장자 제외를 넣지 않는다.
+   *
+   * 부정 전방탐색 안의 `.*\.(?:png|…)` 에는 끝 앵커가 없어서 확장자가 경로
+   * **어디에** 있어도 걸린다. `/api/mail/1/5.png` 가 미들웨어를 통째로 건너뛰어
+   * 로그인 없이 메일 본문이 읽혔다 — 라우트가 `messageId="5.png"` 로 그대로
+   * 매치되기 때문이다. 앵커를 붙여도 끝에 `.png` 를 달면 그만이라 소용없다.
+   *
+   * 정적 자산은 아래 PUBLIC_PREFIXES 의 "/_next" · "/favicon" 이 이미
+   * 통과시키므로 여기서 뺄 이유가 없다.
+   */
+  matcher: ["/((?!_next/static|_next/image|favicon\\.ico).*)"],
 };
