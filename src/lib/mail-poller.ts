@@ -2,6 +2,7 @@ import { and, eq, inArray } from "drizzle-orm";
 
 import { db, schema } from "./db";
 import { fetchAllInboxes } from "./mail-fetch";
+import { clipSubject, detectInjection, maskEmail } from "./injection";
 import { refreshMailCache } from "./mail-cache";
 
 /**
@@ -33,29 +34,49 @@ export interface NewMail {
   receivedAt: number;
 }
 
-let timer: NodeJS.Timeout | null = null;
+/**
+ * 한 번 수집한다. `instrumentation` 의 타이머가 라우트를 통해 부른다.
+ *
+ * 겹쳐 돌지 않게 막는다 — 느린 IMAP 이 겹치면 같은 메일을 두 번 새것으로 볼 수
+ * 있다.
+ */
 let running = false;
 
-export function startMailPoller(): void {
-  if (timer) return;
-  // 기동 직후 한 번. 컨테이너를 막 올렸을 때 10분을 기다릴 이유가 없다.
-  setTimeout(() => void tick(), 5000);
-  timer = setInterval(() => void tick(), INTERVAL_MS);
-  console.log(`[mail-poller] ${INTERVAL_MS / 60000}분마다 자동 수집`);
-}
-
-async function tick(): Promise<void> {
-  // 한 번에 하나만. 느린 IMAP 이 겹치면 같은 메일을 두 번 새것으로 볼 수 있다.
-  if (running) return;
+export async function pollOnce(): Promise<{ newMails: number; skipped?: true }> {
+  if (running) return { newMails: 0, skipped: true };
   running = true;
   try {
     const payload = await refreshMailCache(fetchAllInboxes);
     const fresh = detectNew(payload.inboxes);
-    if (fresh.length === 0) return;
-    console.log(`[mail-poller] 새 메일 ${fresh.length}통`);
-    await handOff(fresh.slice(0, MAX_HANDOFF));
+    if (fresh.length === 0) return { newMails: 0 };
+
+    /*
+     * 주입 흔적이 있는 것은 에이전트에게 보내지 않는다.
+     *
+     * 값싼 1차 거름망이다. 표현을 바꾸면 지나가므로 이걸 믿고 뒤를 느슨하게
+     * 두면 안 된다 — 진짜 방어는 에이전트에게 도구를 주지 않고 출력을 1비트로
+     * 묶은 쪽에 있다. 다만 걸린 것은 사용자가 알아야 한다.
+     */
+    const safe: NewMail[] = [];
+    const blocked: { subject: string; marker: string; field: string; mailbox: string }[] = [];
+    for (const m of fresh) {
+      const hit = detectInjection([
+        { field: "제목", value: m.subject },
+        { field: "보낸이", value: m.from },
+      ]);
+      if (hit) blocked.push({ subject: m.subject, marker: hit.marker, field: hit.field, mailbox: m.mailbox });
+      else safe.push(m);
+    }
+
+    console.log(
+      `[poll] 새 메일 ${fresh.length}통` + (blocked.length ? ` (차단 ${blocked.length})` : ""),
+    );
+    if (blocked.length > 0) await reportBlocked(blocked);
+    if (safe.length > 0) await handOff(safe.slice(0, MAX_HANDOFF));
+    return { newMails: fresh.length };
   } catch (e) {
-    console.error("[mail-poller] 실패:", e instanceof Error ? e.message : e);
+    console.error("[poll] 실패:", e instanceof Error ? e.message : e);
+    return { newMails: 0 };
   } finally {
     running = false;
   }
@@ -134,6 +155,13 @@ function detectNew(inboxes: {
  */
 async function handOff(mails: NewMail[]): Promise<void> {
   if (!AGENT_URL || !AGENT_TOKEN) return;
+  // 제목은 자르고 주소는 가려서 보낸다. 둘 다 남이 정하는 문자열이라,
+  // 판정에 필요한 만큼만 넘긴다.
+  const trimmed = mails.map((m) => ({
+    ...m,
+    subject: clipSubject(m.subject),
+    from: maskEmail(m.from),
+  }));
   try {
     const res = await fetch(new URL("/triage", AGENT_URL), {
       method: "POST",
@@ -141,7 +169,7 @@ async function handOff(mails: NewMail[]): Promise<void> {
         authorization: `Bearer ${AGENT_TOKEN}`,
         "content-type": "application/json",
       },
-      body: JSON.stringify({ mails }),
+      body: JSON.stringify({ mails: trimmed }),
       signal: AbortSignal.timeout(120_000),
     });
     if (!res.ok) {
@@ -149,5 +177,38 @@ async function handOff(mails: NewMail[]): Promise<void> {
     }
   } catch (e) {
     console.error("[mail-poller] 에이전트에 닿지 못함:", e instanceof Error ? e.message : e);
+  }
+}
+
+/**
+ * 차단한 것을 사용자에게 알린다.
+ *
+ * 문장은 BentoAgent 쪽에서 고정으로 쓴다. 여기서는 무엇이 걸렸는지만 넘긴다 —
+ * 제목은 앞 8글자만. 걸린 제목을 통째로 보여 주면 그게 곧 공격자의 문장을
+ * 화면에 띄우는 일이 된다.
+ */
+async function reportBlocked(
+  items: { subject: string; marker: string; field: string; mailbox: string }[],
+): Promise<void> {
+  if (!AGENT_URL || !AGENT_TOKEN) return;
+  try {
+    await fetch(new URL("/security-alert", AGENT_URL), {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${AGENT_TOKEN}`,
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        blocked: items.map((b) => ({
+          head: b.subject.replace(/\s+/g, " ").trim().slice(0, 8),
+          marker: b.marker,
+          field: b.field,
+          mailbox: b.mailbox,
+        })),
+      }),
+      signal: AbortSignal.timeout(20_000),
+    });
+  } catch (e) {
+    console.error("[poll] 차단 알림 실패:", e instanceof Error ? e.message : e);
   }
 }

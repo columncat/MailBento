@@ -1,3 +1,5 @@
+import { detectInjection } from "./injection.js";
+
 /**
  * 응답 다듬기.
  *
@@ -75,6 +77,20 @@ export interface ArchivedSummary {
 /** 본문 기본 상한. 메일 하나가 대화를 다 먹지 않게. */
 export const DEFAULT_BODY_LIMIT = 4000;
 
+/**
+ * 주입 흔적이 있으면 값을 지우고 표지만 남긴다.
+ *
+ * 앱의 자동 수집에서 이미 한 번 거르지만, 에이전트가 도구로 직접 목록을 부르는
+ * 길도 있다. 그쪽으로 들어오는 것도 같은 규칙으로 막는다 — 한 곳만 막아 두면
+ * 다른 문으로 들어온다.
+ */
+function guard(value: string | null, field: string): string | null {
+  if (!value) return value;
+  const hit = detectInjection([{ field, value }]);
+  if (!hit) return value;
+  return `[차단됨 — ${hit.marker} 가 발견되어 내용을 감췄습니다]`;
+}
+
 export function clip(s: string | null, limit: number): string | null {
   if (s === null) return null;
   if (limit <= 0 || s.length <= limit) return s;
@@ -96,10 +112,10 @@ const who = (a: MailAddress) => (a.name ? `${a.name} <${a.email}>` : a.email);
 export function shapeMessage(m: MailMessage) {
   return compact({
     id: m.id,
-    subject: m.subject || "(제목 없음)",
-    from: who(m.from),
+    subject: guard(m.subject, "제목") || "(제목 없음)",
+    from: guard(who(m.from), "보낸이"),
     receivedAt: m.receivedAt,
-    snippet: m.snippet,
+    snippet: guard(m.snippet, "미리보기"),
     unread: m.unread,
     mark: m.mark ?? null,
     archived: m.archived ?? false,
@@ -117,14 +133,17 @@ export function shapeDetail(d: MailMessageDetail, bodyLimit: number) {
         : null;
   return compact({
     id: d.id,
-    subject: d.subject || "(제목 없음)",
-    from: who(d.from),
+    subject: guard(d.subject, "제목") || "(제목 없음)",
+    from: guard(who(d.from), "보낸이"),
     to: d.to?.map(who) ?? [],
     cc: d.cc?.map(who) ?? [],
     receivedAt: d.receivedAt,
     unread: d.unread,
     mark: d.mark ?? null,
+    // 본문은 감추지 않는다. 사용자가 버튼으로 허락하고 읽는 자리이고, 감추면
+    // 읽는 의미가 없다. 대신 주입 흔적이 있으면 그 사실을 함께 알린다.
     body: clip(body, bodyLimit),
+    injectionSuspected: body ? detectInjection([{ field: "본문", value: body }])?.marker ?? null : null,
     bodyFormat: d.text && d.text.trim() ? "text" : d.html ? "html→text" : "none",
   });
 }
@@ -150,7 +169,7 @@ export function stripHtml(html: string): string {
 export function shapeArchived(a: ArchivedSummary) {
   return compact({
     id: a.id,
-    subject: a.subject || "(제목 없음)",
+    subject: guard(a.subject, "제목") || "(제목 없음)",
     from: a.fromName ? `${a.fromName} <${a.fromEmail}>` : a.fromEmail,
     receivedAt: a.receivedAt,
     archivedAt: a.archivedAt,

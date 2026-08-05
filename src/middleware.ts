@@ -13,6 +13,11 @@ const PUBLIC_PREFIXES = [
   "/api/auth/auto-renew",
   "/_next",
   "/favicon",
+  /**
+   * 자동 수집이 자기 자신을 부르는 경로.
+   * 같은 프로세스만 아는 토큰이 자물쇠라 로그인은 필요 없다.
+   */
+  "/api/internal/poll",
 ];
 
 function isPublic(pathname: string): boolean {
