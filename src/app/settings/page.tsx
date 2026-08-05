@@ -7,7 +7,6 @@ import { isAuthEnabled } from "@/lib/auth";
 import { db, schema } from "@/lib/db";
 
 import { AccountActions } from "./account-actions";
-import { MailFetchSettings } from "./mail-cache-setting";
 import { PreferencesPanel } from "./preferences-panel";
 import { RegionsSetting } from "./regions-setting";
 import { SettingsIO } from "./settings-io";
@@ -137,9 +136,6 @@ export default async function SettingsPage({
           </ul>
         )}
       </section>
-
-      {/* 메일 가져오기 (캐시/주기/강제) */}
-      <MailFetchSettings initial={appConfig} />
 
       {/* 시계 위젯 지역 */}
       <section className="rounded-[var(--radius-card)] bg-(--color-surface) p-6 ring-1 ring-(--color-border-soft)">

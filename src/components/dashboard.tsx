@@ -76,8 +76,6 @@ interface MailResponse {
 export function Dashboard({
   initialAccounts,
   initialWidgetState,
-  refreshIntervalSeconds,
-  forceOnInterval,
   regions,
   widgetEnabled,
   onWidgetToggle,
@@ -85,8 +83,6 @@ export function Dashboard({
 }: {
   initialAccounts: AccountSummary[];
   initialWidgetState: WidgetState;
-  refreshIntervalSeconds: number;
-  forceOnInterval: boolean;
   /** 시계 위젯 지역 (설정에서 편집). */
   regions: RegionInput[];
   widgetEnabled: boolean;
@@ -253,8 +249,8 @@ export function Dashboard({
     }
 
     try {
-      // force = 서버 캐시 무시. 수동 새로고침은 항상 force,
-      // interval 은 forceOnInterval 설정에 따름, 첫 로드는 캐시 허용.
+      // force = IMAP 재조회. 손으로 누른 새로고침만 쓴다 —
+      // 주기적인 수집은 서버가 스스로 한다(lib/mail-poller).
       const res = await fetch(force ? "/api/mail?force=1" : "/api/mail", {
         cache: "no-store",
         signal: ac.signal,
@@ -293,22 +289,21 @@ export function Dashboard({
 
   useEffect(() => {
     if (initialAccounts.length === 0) return;
-    // 첫 로드: 캐시 허용 (TTL 이내면 서버가 IMAP 재조회 없이 응답)
+    /*
+     * 첫 로드만 가져오고, 뒤로는 화면에서 주기적으로 두드리지 않는다.
+     *
+     * 수집은 서버가 10분마다 스스로 한다. 화면마다 타이머를 돌리면 탭을 여러 개
+     * 열어 둔 만큼 IMAP 을 두드리게 되고, 정작 브라우저를 닫아 두면 아무 일도
+     * 일어나지 않는다 — 그래서 "새 메일이 왔다" 를 알아챌 곳이 없었다.
+     *
+     * 서버가 새로 가져온 것을 보려면 새로고침을 누르거나 페이지를 다시 열면 된다
+     * (캐시는 만료되지 않으므로 IMAP 을 다시 타지 않는다).
+     */
     fetchInboxes(false, false);
-    const id = setInterval(
-      () => fetchInboxes(false, forceOnInterval),
-      refreshIntervalSeconds * 1000,
-    );
     return () => {
-      clearInterval(id);
       abortRef.current?.abort();
     };
-  }, [
-    fetchInboxes,
-    refreshIntervalSeconds,
-    forceOnInterval,
-    initialAccounts.length,
-  ]);
+  }, [fetchInboxes, initialAccounts.length]);
 
   // ─ DnD ─
   const sensors = useSensors(

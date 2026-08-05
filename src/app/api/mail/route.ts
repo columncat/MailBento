@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 
 import { getAppConfig } from "@/lib/app-config";
 import { db, schema } from "@/lib/db";
-import { env } from "@/lib/env";
+import { fetchAllInboxes } from "@/lib/mail-fetch";
 import {
   getMailCache,
   refreshMailCache,
@@ -11,51 +11,9 @@ import {
 } from "@/lib/mail-cache";
 import { archiveIdsBySource } from "@/lib/archive-server";
 import { loadFlags } from "@/lib/message-flags";
-import { fetchInboxesGrouped } from "@/lib/providers/imap";
 import type { InboxFetchResult } from "@/lib/providers/types";
 
 export const dynamic = "force-dynamic";
-
-/** IMAP 조회 → 캐시에 넣을 원본 payload (표식은 여기서 섞지 않는다). */
-async function fetchFresh(): Promise<MailPayload> {
-  const accounts = await db
-    .select()
-    .from(schema.accounts)
-    .orderBy(schema.accounts.position)
-    .all();
-
-  // 같은 자격증명(계정)은 연결 1개 공유 → 뷰마다 따로 연결하지 않음
-  const fetched = await fetchInboxesGrouped(accounts, env.MESSAGES_PER_BOX);
-
-  const inboxes: InboxFetchResult[] = accounts.map((account) => {
-    const r = fetched.get(account.id) ?? {
-      messages: [],
-      unreadCount: null,
-      error: "결과 없음",
-    };
-    if (r.error) {
-      console.warn(
-        `[mail] account #${account.id} "${account.displayName}": ${r.error}`,
-      );
-    }
-    return {
-      account: {
-        id: account.id,
-        provider: account.provider,
-        displayName: account.displayName,
-        email: account.email,
-        iconUrl: account.iconUrl,
-        displayEmail: account.displayEmail,
-        webUrl: account.webUrl,
-      },
-      messages: r.messages,
-      unreadCount: r.unreadCount,
-      error: r.error,
-    };
-  });
-
-  return { inboxes, fetchedAt: Date.now() };
-}
 
 /**
  * 캐시된 원본에 앱 내부 표식(읽음/마크)을 덮어씌운다.
@@ -91,20 +49,22 @@ function withFlags(payload: MailPayload): MailPayload {
 
 export async function GET(req: Request) {
   const force = new URL(req.url).searchParams.get("force") === "1";
-  const ttlMs = getAppConfig().mailCacheSeconds * 1000;
   const cache = getMailCache();
 
-  // 캐시가 없거나, 강제 새로고침이거나, 캐시를 끈 경우 → 새 결과를 기다린다
-  if (force || !cache || ttlMs <= 0) {
-    const payload = await refreshMailCache(fetchFresh);
+  /*
+   * 캐시는 만료되지 않는다.
+   *
+   * 새로 가져오는 일은 서버가 10분마다 스스로 한다(lib/mail-poller). 화면은
+   * 그 결과를 보기만 하면 되고, TTL 을 두면 화면을 여는 사람마다 IMAP 을
+   * 두드리게 된다. 갱신은 성공했을 때만 갈아끼우므로 낡은 값이 보일지언정
+   * 비지는 않는다.
+   *
+   * 손으로 누르는 새로고침(force=1)만 즉시 다시 가져온다.
+   */
+  if (force || !cache) {
+    const payload = await refreshMailCache(fetchAllInboxes);
     return NextResponse.json({ ...withFlags(payload), cached: false, stale: false });
   }
 
-  const stale = Date.now() - cache.fetchedAt >= ttlMs;
-  if (stale) {
-    // 만료돼도 버리지 않는다 — 낡은 값을 바로 주고 뒤에서 갱신
-    revalidateInBackground(fetchFresh);
-  }
-
-  return NextResponse.json({ ...withFlags(cache), cached: true, stale });
+  return NextResponse.json({ ...withFlags(cache), cached: true, stale: false });
 }

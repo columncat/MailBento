@@ -2,6 +2,7 @@ import { sql } from "drizzle-orm";
 import {
   index,
   integer,
+  primaryKey,
   sqliteTable,
   text,
   uniqueIndex,
@@ -160,6 +161,27 @@ export type MessageFlagRow = typeof messageFlags.$inferSelect;
  * parsed.attachments 를 읽지 않는다. 본문의 cid: 이미지는 지금도 깨진 채로
  * 보이며, 보관하면 그 상태가 그대로 굳는다.
  */
+/**
+ * 이미 본 메일. "새 메일" 판정에만 쓴다.
+ *
+ * 메모리 캐시로는 판정할 수 없다 — 재시작하면 비어서 받은편지함 전체가 새것이
+ * 된다. 본문은 담지 않는다. 새것인지만 알면 되고, 본문을 쌓아 두면 DB 가
+ * 메일 전문 저장소가 된다.
+ */
+export const seenMessages = sqliteTable(
+  "seen_messages",
+  {
+    accountId: integer("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    messageId: text("message_id").notNull(),
+    firstSeenAt: integer("first_seen_at").notNull(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.accountId, t.messageId] }),
+  }),
+);
+
 export const archivedMessages = sqliteTable(
   "archived_messages",
   {

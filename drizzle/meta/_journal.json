@@ -78,6 +78,13 @@
       "when": 1785242035258,
       "tag": "0010_nervous_jack_flag",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "6",
+      "when": 1785916782161,
+      "tag": "0011_curly_omega_sentinel",
+      "breakpoints": true
     }
   ]
 }
