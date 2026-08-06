@@ -18,8 +18,18 @@ export const runtime = "nodejs";
 const AGENT_URL = process.env.AGENT_URL?.trim();
 const AGENT_TOKEN = process.env.AGENT_TOKEN?.trim();
 
-/** 도구를 쓰면 오래 걸린다. 에이전트 쪽 상한(기본 300초)보다 넉넉히 잡는다. */
-const TIMEOUT_MS = Number(process.env.AGENT_TIMEOUT_SECONDS ?? 330) * 1000;
+/**
+ * 여기서 오가는 요청은 전부 금방 끝난다.
+ *
+ * 예전에는 답이 나올 때까지(최대 330초) 붙들었는데, 이 앱 앞에는 Cloudflare
+ * 터널이 있고 원본 응답을 100초까지만 기다린다. 도구를 몇 번 쓰는 답은 대개
+ * 그보다 오래 걸려서 거의 매번 끊겼다 — 화면에는 "failed to fetch" 만 뜨고,
+ * 다시 보내면 같은 질문이 두 번 들어갔다.
+ *
+ * 이제 시작만 시키고 번호를 받아 와서 짧게 여러 번 물어본다. 긴 연결이 없으니
+ * 끊길 자리도 없다.
+ */
+const TIMEOUT_MS = 15_000;
 
 const bodySchema = z.object({ message: z.string().trim().min(1).max(8000) });
 
@@ -87,6 +97,28 @@ export async function GET(req: Request) {
     }
   }
 
+  // 진행 중인 작업 물어보기. 화면이 몇 초마다 부른다.
+  const job = new URL(req.url).searchParams.get("job");
+  if (job) {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 10_000);
+    try {
+      const res = await fetch(
+        new URL(`/chat/status?id=${encodeURIComponent(job)}`, AGENT_URL),
+        { headers: { authorization: `Bearer ${AGENT_TOKEN}` }, signal: ctl.signal },
+      );
+      const text = await res.text();
+      return NextResponse.json(text ? JSON.parse(text) : {}, { status: res.status });
+    } catch (e) {
+      return NextResponse.json(
+        { error: e instanceof Error ? e.message : String(e) },
+        { status: 502 },
+      );
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), 2000);
   try {
@@ -105,7 +137,8 @@ export async function POST(req: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: "message 가 필요합니다" }, { status: 400 });
   }
-  return forward("/chat", { message: parsed.data.message, from: "mailbento" });
+  // 시작만 시키고 번호를 받는다. 답은 화면이 따로 물어본다.
+  return forward("/chat/start", { message: parsed.data.message, from: "mailbento" });
 }
 
 /** 새 대화 — 에이전트 쪽 세션을 버린다 (Discord 맥락도 함께 사라진다). */

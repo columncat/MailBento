@@ -26,6 +26,25 @@ interface Turn {
   error?: boolean;
 }
 
+/** 진행 중인 요청의 상태. 에이전트가 도구를 부를 때마다 값이 바뀐다. */
+interface Status {
+  state: "running" | "done";
+  elapsedMs: number;
+  toolCount: number;
+  lastTool: string | null;
+  reply?: string;
+  isError?: boolean;
+  denials?: string[];
+}
+
+/** 물어보는 간격. 짧게 여러 번이 긴 연결 하나보다 안전하다. */
+const POLL_MS = 2000;
+
+/** `mcp__memobento__list_notebooks` → `memobento·list_notebooks`. 보기 위한 것뿐이다. */
+function shortTool(name: string): string {
+  return name.replace(/^mcp__/, "").replace(/__/g, "·");
+}
+
 interface Props {
   /**
    * 답변 안의 `[[memo:<id>]]` 를 무엇으로 바꿔 그릴지.
@@ -45,8 +64,11 @@ export function AgentChat({ renderMemoRef }: Props = {}) {
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
+  const [progress, setProgress] = useState<Status | null>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
+  /** 보내는 중인지. 상태가 아니라 ref 인 이유는 send() 안에 적어 뒀다. */
+  const sending = useRef(false);
 
   useEffect(() => {
     fetch("/api/agent/chat")
@@ -89,32 +111,58 @@ export function AgentChat({ renderMemoRef }: Props = {}) {
     return () => document.removeEventListener("keydown", onKey);
   }, [open]);
 
+  /**
+   * 답이 나올 때까지 물어본다.
+   *
+   * 예전에는 한 요청을 붙들고 답을 기다렸는데, 이 앱 앞의 Cloudflare 터널이
+   * 원본 응답을 100초까지만 기다린다. 도구를 쓰는 답은 대개 그보다 오래 걸려서
+   * 거의 매번 끊겼다. 지금은 시작만 시키고 짧게 여러 번 물어본다.
+   */
+  const poll = async (job: string): Promise<Status> => {
+    for (;;) {
+      await new Promise((r) => setTimeout(r, POLL_MS));
+      const res = await fetch(`/api/agent/chat?job=${encodeURIComponent(job)}`);
+      const json = (await res.json()) as Status & { gone?: boolean; error?: string };
+      if (json.gone) {
+        // 에이전트가 다시 켜졌다. 답이 어디까지 갔는지는 기록에 남아 있다.
+        await loadHistory();
+        throw new Error("에이전트가 다시 시작되어 이 요청은 사라졌습니다");
+      }
+      if (!res.ok) throw new Error(json.error ?? `상태 확인 실패 (${res.status})`);
+      setProgress(json);
+      if (json.state === "done") return json;
+    }
+  };
+
   const send = async () => {
     const message = draft.trim();
-    if (!message || busy) return;
+    // busy 는 상태라 곧바로 반영되지 않는다. Enter 를 연달아 치면 둘 다
+    // 통과해서 같은 질문이 두 번 들어간다. 문지기는 ref 로 둔다.
+    if (!message || sending.current) return;
+    sending.current = true;
     setDraft("");
     setTurns((t) => [...t, { role: "me", text: message, at: Date.now() }]);
     setBusy(true);
+    setProgress(null);
     try {
       const res = await fetch("/api/agent/chat", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ message }),
       });
-      const json = (await res.json()) as {
-        reply?: string;
-        error?: string;
-        denials?: string[];
-        isError?: boolean;
-      };
+      const started = (await res.json()) as { id?: string; error?: string };
+      if (!res.ok || !started.id) {
+        throw new Error(started.error ?? `시작하지 못했습니다 (${res.status})`);
+      }
+      const done = await poll(started.id);
       setTurns((t) => [
         ...t,
         {
           role: "agent",
-          text: json.reply ?? json.error ?? "[빈 응답]",
+          text: done.reply ?? "[빈 응답]",
           at: Date.now(),
-          denials: json.denials,
-          error: !res.ok || json.isError === true,
+          denials: done.denials,
+          error: done.isError === true,
         },
       ]);
     } catch (e) {
@@ -129,6 +177,8 @@ export function AgentChat({ renderMemoRef }: Props = {}) {
       ]);
     } finally {
       setBusy(false);
+      setProgress(null);
+      sending.current = false;
     }
   };
 
@@ -242,7 +292,19 @@ export function AgentChat({ renderMemoRef }: Props = {}) {
               {busy && (
                 <div className="flex items-center gap-2 text-[12px] text-(--color-fg-4)">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  생각하는 중… (도구를 쓰면 몇십 초 걸립니다)
+                  {progress ? (
+                    <span>
+                      {Math.round(progress.elapsedMs / 1000)}초째
+                      {progress.toolCount > 0 && ` · 도구 ${progress.toolCount}회`}
+                      {progress.lastTool && (
+                        <span className="ml-1 font-mono text-[11px] text-(--color-fg-4)">
+                          {shortTool(progress.lastTool)}
+                        </span>
+                      )}
+                    </span>
+                  ) : (
+                    <span>생각하는 중…</span>
+                  )}
                 </div>
               )}
               <div ref={endRef} />
