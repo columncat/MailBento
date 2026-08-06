@@ -3,6 +3,7 @@
 import { Loader2, RotateCcw, Send, Sparkles, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { RichText, type MemoSlot } from "@/components/rich-text";
 import { cn } from "@/lib/utils";
 
 /**
@@ -25,7 +26,17 @@ interface Turn {
   error?: boolean;
 }
 
-export function AgentChat() {
+interface Props {
+  /**
+   * 답변 안의 `[[memo:<id>]]` 를 무엇으로 바꿔 그릴지.
+   *
+   * 이 창은 두 앱이 같은 파일을 쓴다. 메모를 아는 쪽만 넘겨 주고, 모르는
+   * 쪽은 넘기지 않는다 — 없으면 id 가 회색 글자로 남을 뿐이다.
+   */
+  renderMemoRef?: MemoSlot;
+}
+
+export function AgentChat({ renderMemoRef }: Props = {}) {
   // 설정되지 않은 배포에서는 버튼 자체를 두지 않는다. 눌러야 알 수 있는
   // 것보다, 없는 편이 낫다.
   const [enabled, setEnabled] = useState<boolean | null>(null);
@@ -204,7 +215,7 @@ export function AgentChat() {
                 <div
                   key={i}
                   className={cn(
-                    "max-w-[min(72ch,88%)] rounded-xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap",
+                    "max-w-[min(72ch,88%)] rounded-xl px-4 py-2.5 text-sm leading-relaxed",
                     t.role === "me"
                       ? "ml-auto bg-(--color-accent-soft) text-(--color-accent-strong)"
                       : t.error
@@ -212,7 +223,15 @@ export function AgentChat() {
                         : "bg-(--color-bg-2) text-(--color-fg-2)",
                   )}
                 >
-                  {t.text}
+                  {/*
+                    내가 쓴 말은 쓴 그대로 둔다. 서식을 입히면 내가 친 별표가
+                    사라져 무슨 말을 보냈는지 되짚을 수 없다.
+                  */}
+                  {t.role === "me" || t.error ? (
+                    <span className="whitespace-pre-wrap">{t.text}</span>
+                  ) : (
+                    <RichText text={t.text} memoSlot={renderMemoRef} />
+                  )}
                   {t.denials && t.denials.length > 0 && (
                     <p className="mt-1.5 text-[11px] text-(--color-warn)">
                       허용되지 않은 도구를 쓰려고 했습니다: {t.denials.join(", ")}
