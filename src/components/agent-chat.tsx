@@ -1,7 +1,7 @@
 "use client";
 
 import { Loader2, RotateCcw, Send, Sparkles, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -12,14 +12,15 @@ import { cn } from "@/lib/utils";
  * 대신 불러 준다 — 토큰이 화면에 실리지 않고, 이미 있는 로그인이 그대로
  * 경계가 된다.
  *
- * 대화 내용은 여기 두지 않는다. 맥락은 에이전트 쪽 세션 하나에 있고 Discord 와
- * 같은 것을 쓴다. 이 목록은 이번에 열어 둔 창에서 주고받은 것만 보여 준다 —
- * 새로고침하면 비지만 대화 자체는 이어진다.
+ * 보이는 대화는 **웹으로 주고받은 것만**이다. 맥락 자체는 에이전트 쪽 세션
+ * 하나이고 Discord 와 공유하지만, 화면에 Discord 대화까지 끌어오면 어디서 한
+ * 말인지 뒤섞인다. 그래서 기록은 창구별로 두고 맥락만 공유한다.
  */
 
 interface Turn {
   role: "me" | "agent";
   text: string;
+  at?: number;
   denials?: string[];
   error?: boolean;
 }
@@ -30,6 +31,7 @@ export function AgentChat() {
   const [enabled, setEnabled] = useState<boolean | null>(null);
   const [open, setOpen] = useState(false);
   const [turns, setTurns] = useState<Turn[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(false);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
   const endRef = useRef<HTMLDivElement | null>(null);
@@ -42,19 +44,45 @@ export function AgentChat() {
       .catch(() => setEnabled(false));
   }, []);
 
+  const loadHistory = useCallback(async () => {
+    setLoadingHistory(true);
+    try {
+      const r = await fetch("/api/agent/chat?history=1");
+      const j = (await r.json()) as { turns?: Turn[] };
+      if (Array.isArray(j.turns)) setTurns(j.turns);
+    } catch {
+      /* 기록을 못 불러와도 새로 대화할 수는 있다 */
+    } finally {
+      setLoadingHistory(false);
+    }
+  }, []);
+
+  // 열 때마다 다시 읽는다. 다른 탭이나 창에서 주고받은 것도 따라온다.
   useEffect(() => {
-    if (open) inputRef.current?.focus();
-  }, [open]);
+    if (!open) return;
+    inputRef.current?.focus();
+    void loadHistory();
+  }, [open, loadHistory]);
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [turns, busy]);
 
+  // 큰 창이라 Esc 로 닫히는 편이 자연스럽다.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") setOpen(false);
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [open]);
+
   const send = async () => {
     const message = draft.trim();
     if (!message || busy) return;
     setDraft("");
-    setTurns((t) => [...t, { role: "me", text: message }]);
+    setTurns((t) => [...t, { role: "me", text: message, at: Date.now() }]);
     setBusy(true);
     try {
       const res = await fetch("/api/agent/chat", {
@@ -73,6 +101,7 @@ export function AgentChat() {
         {
           role: "agent",
           text: json.reply ?? json.error ?? "[빈 응답]",
+          at: Date.now(),
           denials: json.denials,
           error: !res.ok || json.isError === true,
         },
@@ -80,7 +109,12 @@ export function AgentChat() {
     } catch (e) {
       setTurns((t) => [
         ...t,
-        { role: "agent", text: e instanceof Error ? e.message : String(e), error: true },
+        {
+          role: "agent",
+          text: e instanceof Error ? e.message : String(e),
+          at: Date.now(),
+          error: true,
+        },
       ]);
     } finally {
       setBusy(false);
@@ -88,8 +122,11 @@ export function AgentChat() {
   };
 
   const reset = async () => {
+    if (!confirm("맥락과 이 창의 기록을 모두 지웁니다. Discord 쪽 맥락도 함께 사라집니다. 진행할까요?")) {
+      return;
+    }
     await fetch("/api/agent/chat", { method: "DELETE" }).catch(() => undefined);
-    setTurns([{ role: "agent", text: "새 대화로 시작합니다. Discord 쪽 맥락도 함께 지워졌습니다." }]);
+    setTurns([]);
   };
 
   if (enabled !== true) return null;
@@ -108,16 +145,16 @@ export function AgentChat() {
       </button>
 
       {open && (
-        <div className="fixed inset-0 z-50 flex items-end justify-end p-4 sm:p-6">
-          {/* 뒤를 덮되 화면은 계속 보이게 — 메모를 보며 물어보는 일이 많다 */}
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-6">
           <button
             type="button"
             aria-label="닫기"
             onClick={() => setOpen(false)}
-            className="absolute inset-0 cursor-default bg-(--color-bg)/40"
+            className="absolute inset-0 cursor-default bg-(--color-bg)/70 backdrop-blur-[2px]"
           />
-          <section className="relative flex h-[min(640px,80vh)] w-[min(440px,92vw)] flex-col overflow-hidden rounded-[var(--radius-card)] bg-(--color-surface) shadow-2xl ring-1 ring-(--color-border-soft)">
-            <header className="flex shrink-0 items-center justify-between border-b border-(--color-border-soft) px-4 py-3">
+          {/* 화면을 거의 다 쓴다 — 긴 답과 지난 대화를 함께 보려면 좁아서는 안 된다 */}
+          <section className="relative flex h-[92vh] w-[min(1080px,96vw)] flex-col overflow-hidden rounded-[var(--radius-card)] bg-(--color-surface) shadow-2xl ring-1 ring-(--color-border-soft)">
+            <header className="flex shrink-0 items-center justify-between border-b border-(--color-border-soft) px-5 py-3.5">
               <div className="flex min-w-0 items-center gap-2">
                 <Sparkles className="h-4 w-4 shrink-0 text-(--color-accent-strong)" />
                 <span className="truncate text-sm font-medium text-(--color-fg)">
@@ -131,27 +168,34 @@ export function AgentChat() {
                 <button
                   type="button"
                   onClick={() => void reset()}
-                  className="grid h-7 w-7 place-items-center rounded-lg text-(--color-fg-4) transition hover:bg-(--color-surface-hi) hover:text-(--color-fg-2)"
+                  className="grid h-8 w-8 place-items-center rounded-lg text-(--color-fg-4) transition hover:bg-(--color-surface-hi) hover:text-(--color-fg-2)"
                   aria-label="새 대화"
-                  title="새 대화 — 맥락을 지웁니다 (Discord 쪽도 함께)"
+                  title="새 대화 — 맥락과 기록을 지웁니다 (Discord 쪽 맥락도 함께)"
                 >
-                  <RotateCcw className="h-3.5 w-3.5" />
+                  <RotateCcw className="h-4 w-4" />
                 </button>
                 <button
                   type="button"
                   onClick={() => setOpen(false)}
-                  className="grid h-7 w-7 place-items-center rounded-lg text-(--color-fg-4) transition hover:bg-(--color-surface-hi) hover:text-(--color-fg-2)"
+                  className="grid h-8 w-8 place-items-center rounded-lg text-(--color-fg-4) transition hover:bg-(--color-surface-hi) hover:text-(--color-fg-2)"
                   aria-label="닫기"
+                  title="닫기 (Esc)"
                 >
-                  <X className="h-4 w-4" />
+                  <X className="h-4.5 w-4.5" />
                 </button>
               </div>
             </header>
 
-            <div className="scrollbar-thin min-h-0 flex-1 space-y-2.5 overflow-y-auto px-4 py-3">
-              {turns.length === 0 && (
-                <p className="px-1 py-8 text-center text-[13px] break-keep text-(--color-fg-4)">
-                  메모함과 메일함을 읽고 고칠 수 있습니다.
+            <div className="scrollbar-thin min-h-0 flex-1 space-y-3 overflow-y-auto px-5 py-4">
+              {loadingHistory && turns.length === 0 && (
+                <div className="flex items-center gap-2 px-1 py-8 text-[13px] text-(--color-fg-4)">
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  지난 대화를 불러오는 중…
+                </div>
+              )}
+              {!loadingHistory && turns.length === 0 && (
+                <p className="px-1 py-12 text-center text-sm break-keep text-(--color-fg-4)">
+                  메일함과 메모함을 읽고 고칠 수 있습니다.
                   <br />
                   &ldquo;오늘 안 읽은 메일 정리해줘&rdquo; 처럼 말해 보세요.
                 </p>
@@ -160,7 +204,7 @@ export function AgentChat() {
                 <div
                   key={i}
                   className={cn(
-                    "max-w-[85%] rounded-xl px-3 py-2 text-[13px] leading-relaxed whitespace-pre-wrap",
+                    "max-w-[min(72ch,88%)] rounded-xl px-4 py-2.5 text-sm leading-relaxed whitespace-pre-wrap",
                     t.role === "me"
                       ? "ml-auto bg-(--color-accent-soft) text-(--color-accent-strong)"
                       : t.error
@@ -190,7 +234,7 @@ export function AgentChat() {
                 e.preventDefault();
                 void send();
               }}
-              className="flex shrink-0 gap-2 border-t border-(--color-border-soft) px-3 py-3"
+              className="flex shrink-0 gap-2 border-t border-(--color-border-soft) px-4 py-3.5"
             >
               <textarea
                 ref={inputRef}
@@ -203,13 +247,13 @@ export function AgentChat() {
                   }
                 }}
                 rows={2}
-                placeholder="무엇을 할까요? (Enter 로 전송)"
-                className="scrollbar-thin min-w-0 flex-1 resize-none rounded-lg bg-(--color-bg-2) px-3 py-2 text-[13px] text-(--color-fg) ring-1 ring-(--color-border-soft) outline-none placeholder:text-(--color-fg-4) focus:ring-(--color-accent)/60"
+                placeholder="무엇을 할까요? (Enter 로 전송, Shift+Enter 로 줄바꿈)"
+                className="scrollbar-thin min-w-0 flex-1 resize-none rounded-lg bg-(--color-bg-2) px-3.5 py-2.5 text-sm text-(--color-fg) ring-1 ring-(--color-border-soft) outline-none placeholder:text-(--color-fg-4) focus:ring-(--color-accent)/60"
               />
               <button
                 type="submit"
                 disabled={busy || !draft.trim()}
-                className="grid w-11 shrink-0 place-items-center rounded-lg bg-(--color-accent) text-(--color-bg) transition hover:bg-(--color-accent-strong) disabled:opacity-40"
+                className="grid w-12 shrink-0 place-items-center rounded-lg bg-(--color-accent) text-(--color-bg) transition hover:bg-(--color-accent-strong) disabled:opacity-40"
                 aria-label="보내기"
               >
                 <Send className="h-4 w-4" />

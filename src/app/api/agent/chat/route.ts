@@ -66,8 +66,27 @@ async function forward(path: string, body?: unknown) {
  * 환경변수만 보지 않고 실제로 닿는지까지 확인한다. 설정은 돼 있는데 에이전트가
  * 떠 있지 않으면 버튼이 보이고 눌렀을 때만 실패하는데, 그건 없느니만 못하다.
  */
-export async function GET() {
+export async function GET(req: Request) {
   if (!AGENT_URL || !AGENT_TOKEN) return NextResponse.json({ configured: false });
+
+  // 지난 대화 불러오기 — 웹으로 주고받은 것만 있다 (Discord 쪽은 제외).
+  if (new URL(req.url).searchParams.get("history") === "1") {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 5000);
+    try {
+      const res = await fetch(new URL("/history", AGENT_URL), {
+        headers: { authorization: `Bearer ${AGENT_TOKEN}` },
+        signal: ctl.signal,
+      });
+      const text = await res.text();
+      return NextResponse.json(text ? JSON.parse(text) : { turns: [] });
+    } catch {
+      return NextResponse.json({ turns: [] });
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   const ctl = new AbortController();
   const timer = setTimeout(() => ctl.abort(), 2000);
   try {
