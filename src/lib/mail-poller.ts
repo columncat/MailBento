@@ -69,7 +69,11 @@ export async function pollOnce(): Promise<{ newMails: number; skipped?: true }> 
     }
 
     console.log(
-      `[poll] 새 메일 ${fresh.length}통` + (blocked.length ? ` (차단 ${blocked.length})` : ""),
+      `[poll] 새 메일 ${fresh.length}통` +
+        (blocked.length ? ` (차단 ${blocked.length})` : "") +
+        // 넘치면 뒤쪽이 버려진다. 조용히 버리면 "왜 이 메일은 안 물어봤지" 를
+        // 되짚을 때 아무 단서가 없다.
+        (safe.length > MAX_HANDOFF ? ` — ${safe.length - MAX_HANDOFF}통은 이번에 넘기지 않음` : ""),
     );
     if (blocked.length > 0) await reportBlocked(blocked);
     if (safe.length > 0) await handOff(safe.slice(0, MAX_HANDOFF));
