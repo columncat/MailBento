@@ -54,7 +54,7 @@ export function detectInjection(
  * 것이 아니다** — 한국어 40자면 주입 문장은 들어간다. 안전은 에이전트에게
  * 도구를 주지 않고 출력을 Y/N 한 글자로 묶은 쪽에서 온다.
  */
-export const SUBJECT_LIMIT = 40;
+export const SUBJECT_LIMIT = 80;
 
 export function clipSubject(s: string): string {
   const one = s.replace(/\s+/g, " ").trim();
@@ -62,16 +62,47 @@ export function clipSubject(s: string): string {
   return one.length <= SUBJECT_LIMIT ? one : `${one.slice(0, SUBJECT_LIMIT)}…`;
 }
 
+/** 표시 이름 길이. 제목과 같은 성격의 자유 문자열이라 같이 자른다. */
+const NAME_LIMIT = 30;
+
 /**
- * 보낸이 주소 가리기 — 앞 5글자와 뒤 10글자만.
+ * 보낸이 가리기.
  *
- * 주소 자체가 공격자가 정하는 문자열이다. 도메인 뒤쪽은 남겨서 어디서 온
- * 것인지는 알 수 있게 한다.
+ * 앞뒤로 잘라 내던 방식을 버렸다. 그 방식은 판정에 필요한 것만 골라 없애고
+ * 위험한 것은 남겼다.
+ *
+ * - **표시 이름을 통째로 버렸다.** `MyISS vMISCi <noreply@…>` 가
+ *   `norep…purdue.edu` 가 됐다. 어디서 왔는지 가장 잘 말해 주는 부분이다.
+ * - **도메인을 잘라 오히려 속였다.** `zeiglersubaru.com` 이 `subaru.com` 이
+ *   되어 대리점이 제조사처럼 보였고, `kaist.ac.kr` 은 `aist.ac.kr` 이라는
+ *   없는 도메인이 됐다.
+ *
+ * 그래서 반대로 나눈다. 도메인은 **그대로** 남긴다 — DNS 가 쓸 수 있는 글자를
+ * 정해 두므로 문장을 심을 자리가 아니고, 판정에는 가장 쓸모 있다. 자유롭게
+ * 쓸 수 있는 쪽(계정 이름)은 앞 세 글자만 남긴다. 표시 이름은 제목과 같은
+ * 성격이라 제목처럼 길이만 자른다.
+ *
+ * 자르는 것이 안전을 만드는 것이 아니다. 안전은 에이전트에게 도구를 주지 않고
+ * 출력을 Y/N 한 글자로 묶은 쪽에서 온다.
  */
 export function maskEmail(raw: string): string {
   const one = raw.replace(/\s+/g, " ").trim();
-  const at = one.lastIndexOf("@");
-  const addr = at >= 0 ? one.slice(one.lastIndexOf("<") + 1).replace(/>$/, "") : one;
-  if (addr.length <= 15) return addr;
-  return `${addr.slice(0, 5)}…${addr.slice(-10)}`;
+  if (!one) return "(보낸이 없음)";
+
+  // `이름 <주소>` 와 `주소` 둘 다 온다.
+  const open = one.lastIndexOf("<");
+  const addr = (open >= 0 ? one.slice(open + 1).replace(/>$/, "") : one).trim();
+  const rawName = open > 0 ? one.slice(0, open).trim().replace(/^"|"$/g, "") : "";
+  const name = rawName.length > NAME_LIMIT ? `${rawName.slice(0, NAME_LIMIT)}…` : rawName;
+
+  const at = addr.lastIndexOf("@");
+  if (at <= 0) return name ? `${name} <${addr.slice(0, 40)}>` : addr.slice(0, 40);
+
+  const local = addr.slice(0, at);
+  // 도메인이 터무니없이 길면 그건 도메인이 아니라 실어 보낸 글이다.
+  const domain = addr.slice(at + 1).slice(0, 60);
+  const shownLocal = local.length <= 3 ? local : `${local.slice(0, 3)}…`;
+  const shown = `${shownLocal}@${domain}`;
+
+  return name ? `${name} <${shown}>` : shown;
 }
