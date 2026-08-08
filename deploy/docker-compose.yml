@@ -24,6 +24,10 @@ services:
         # 하위 경로에 얹을 때만 채운다 (예: /mail). 옆의 .env 에서 읽는다.
         BASE_PATH: "${MAILBENTO_BASE_PATH:-}"
     restart: unless-stopped
+    environment:
+      # 이 스택이 설정을 관리한다는 표시. 없으면 진입 스크립트가
+      # 예전 방식(환경변수 직접 주입)으로 보고 앱을 바로 띄운다.
+      BENTO_MANAGED: "1"
     ports:
       - "${MAILBENTO_PORT:-3000}:3000"
     volumes:
@@ -39,6 +43,10 @@ services:
       args:
         BASE_PATH: "${MEMOBENTO_BASE_PATH:-}"
     restart: unless-stopped
+    environment:
+      # 이 스택이 설정을 관리한다는 표시. 없으면 진입 스크립트가
+      # 예전 방식(환경변수 직접 주입)으로 보고 앱을 바로 띄운다.
+      BENTO_MANAGED: "1"
     ports:
       - "${MEMOBENTO_PORT:-3001}:3000"
     volumes:
@@ -64,6 +72,10 @@ services:
         MEMOBENTO_REF: main
         MAILBENTO_REF: main
     restart: unless-stopped
+    environment:
+      # 이 스택이 설정을 관리한다는 표시. 없으면 진입 스크립트가
+      # 예전 방식(환경변수 직접 주입)으로 보고 앱을 바로 띄운다.
+      BENTO_MANAGED: "1"
     ports:
       - "127.0.0.1:${AGENT_PORT:-4000}:4000"
     volumes:

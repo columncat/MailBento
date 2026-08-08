@@ -13,6 +13,19 @@ CONFIG_DIR="${BENTO_CONFIG_DIR:-/config}"
 CONFIG="$CONFIG_DIR/mailbento.env"
 DONE="$CONFIG_DIR/setup.json"
 
+# 설정을 환경변수로 직접 받는 배포는 예전 그대로 둔다.
+#
+# 이 갈림길이 없으면 멀쩡히 돌던 배포가 다음 이미지에서 설치 마법사로 바뀐다.
+# 실제로 그랬다 — compose 가 환경변수로 값을 넘겨 주고 있었는데 /config 가
+# 비어 있다는 이유로 앱 대신 마법사가 떴다.
+#
+# 마법사는 스택이 관리하는 배포(BENTO_MANAGED=1)에서만 쓴다. 그 표시가 없어도
+# 암호화 키가 이미 환경에 있으면 누군가 손으로 설정해 둔 것이므로 그대로 간다.
+if [ "${BENTO_MANAGED:-}" != "1" ] && [ -n "${ENCRYPTION_KEY:-}" ]; then
+  echo "[mailbento] 환경변수로 설정된 배포입니다. 앱을 시작합니다."
+  exec node server.js
+fi
+
 # 마법사가 여기에 적어야 한다. 못 적으면 폼을 다 채운 뒤에야 실패하므로
 # 시작할 때 미리 확인한다.
 if [ ! -w "$CONFIG_DIR" ]; then
