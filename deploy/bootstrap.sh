@@ -32,11 +32,18 @@ for r in $REPOS; do
     echo "── $r 갱신"
     git -C "src/$r" fetch --depth 1 origin "$REF"
     git -C "src/$r" reset --hard "origin/$REF"
+  elif [ -d "src/$r" ]; then
+    # 손으로 올려 둔 소스. BentoAgent 는 비공개라 이 기계에 GitHub 자격이
+    # 없으면 받아 올 수 없다 — 그때는 다른 데서 복사해 넣고 그대로 쓴다.
+    echo "── $r 은 이미 있습니다 (git 저장소가 아님) — 그대로 씁니다"
   else
     echo "── $r 받기"
-    # BentoAgent 는 비공개다. 이 계정에 접근 권한이 있어야 한다
-    # (ssh 키나 gh auth 로 설정된 자격 증명을 그대로 쓴다).
-    git clone --depth 1 -b "$REF" "https://github.com/$OWNER/$r.git" "src/$r"
+    if ! git clone --depth 1 -b "$REF" "https://github.com/$OWNER/$r.git" "src/$r"; then
+      echo
+      echo "  $r 을 받지 못했습니다. 비공개 저장소라면 이 기계에 GitHub 자격이" >&2
+      echo "  없는 것입니다. 소스를 src/$r 에 직접 올려 두고 다시 실행하세요." >&2
+      exit 1
+    fi
   fi
 done
 
