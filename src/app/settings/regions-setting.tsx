@@ -10,6 +10,7 @@ import {
   type RegionInput,
 } from "@/lib/regions";
 import { cn } from "@/lib/utils";
+import { apiFetch } from "@/lib/api-path";
 
 /** 자주 쓰는 표준시. 목록에 없으면 직접 적을 수 있다. */
 const TZ_SUGGESTIONS = [
@@ -83,7 +84,7 @@ export function RegionsSetting({ initial }: { initial: RegionInput[] }) {
     setBusy(true);
     setMsg(null);
     try {
-      const res = await fetch("/api/config", {
+      const res = await apiFetch("/api/config", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ regions: rows }),

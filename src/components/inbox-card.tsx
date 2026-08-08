@@ -17,6 +17,7 @@ import { cn, formatRelativeTime } from "@/lib/utils";
 import { MarkPicker } from "./message-mark";
 import { MessageModal } from "./message-modal";
 import { ProviderIcon } from "./provider-icon";
+import { apiFetch } from "@/lib/api-path";
 
 export interface InboxCardData {
   account: {
@@ -63,9 +64,9 @@ export function InboxCard({
     setBusyArchive(m.id);
     try {
       if (m.archiveId) {
-        await fetch(`/api/archive/${m.archiveId}`, { method: "DELETE" });
+        await apiFetch(`/api/archive/${m.archiveId}`, { method: "DELETE" });
       } else {
-        await fetch("/api/archive", {
+        await apiFetch("/api/archive", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ accountId: account.id, messageId: m.id }),
@@ -85,8 +86,7 @@ export function InboxCard({
     patch: { read?: boolean; mark?: MessageMark | null },
   ) => {
     try {
-      await fetch(
-        `/api/mail/${account.id}/${encodeURIComponent(messageId)}`,
+      await apiFetch(`/api/mail/${account.id}/${encodeURIComponent(messageId)}`,
         {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },

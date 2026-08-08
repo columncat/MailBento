@@ -9,6 +9,7 @@ import {
   type ModePref,
   type ThemeKey,
 } from "@/lib/preferences";
+import { apiFetch } from "@/lib/api-path";
 
 type Status = { kind: "idle" | "ok" | "err"; msg?: string };
 
@@ -53,7 +54,7 @@ export function SettingsIO() {
     setBusy(true);
     setStatus({ kind: "idle" });
     try {
-      const res = await fetch("/api/export", { cache: "no-store" });
+      const res = await apiFetch("/api/export", { cache: "no-store" });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const payload = await res.json();
       payload.prefs = readPrefs();
@@ -93,7 +94,7 @@ export function SettingsIO() {
       if (data?.app !== "mailbento") {
         throw new Error("MailBento 백업 파일이 아닙니다");
       }
-      const res = await fetch("/api/import", {
+      const res = await apiFetch("/api/import", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ accounts: data.accounts, widget: data.widget }),

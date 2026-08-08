@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import { readJson } from "@/lib/read-json";
 import { cn } from "@/lib/utils";
+import { apiFetch } from "@/lib/api-path";
 
 /**
  * 에이전트 설정.
@@ -45,7 +46,7 @@ export function AgentPanel() {
 
   const load = useCallback(async () => {
     try {
-      const r = await fetch("/api/agent/config", { cache: "no-store" });
+      const r = await apiFetch("/api/agent/config", { cache: "no-store" });
       const j = await readJson<Settings>(r);
       setS(j);
       setModel(j.model ?? "");
@@ -64,7 +65,7 @@ export function AgentPanel() {
     setErr(null);
     setMsg(null);
     try {
-      const r = await fetch("/api/agent/config", {
+      const r = await apiFetch("/api/agent/config", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify(patch),

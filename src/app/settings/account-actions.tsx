@@ -3,6 +3,7 @@
 import { Copy, Loader2, Pencil, Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { apiFetch } from "@/lib/api-path";
 
 interface Props {
   id: number;
@@ -20,7 +21,7 @@ export function AccountActions({ id, email, canDuplicate }: Props) {
   const onDuplicate = async () => {
     setDuplicating(true);
     try {
-      const res = await fetch(`/api/accounts/${id}/duplicate`, {
+      const res = await apiFetch(`/api/accounts/${id}/duplicate`, {
         method: "POST",
       });
       const json = (await res.json()) as { id?: number; error?: string };
@@ -45,7 +46,7 @@ export function AccountActions({ id, email, canDuplicate }: Props) {
           disabled={pending}
           onClick={() =>
             startTransition(async () => {
-              await fetch(`/api/accounts?id=${id}`, { method: "DELETE" });
+              await apiFetch(`/api/accounts?id=${id}`, { method: "DELETE" });
               router.refresh();
             })
           }

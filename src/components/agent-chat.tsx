@@ -6,6 +6,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { RichText, type MemoSlot } from "@/components/rich-text";
 import { isUnauthenticated, readJson } from "@/lib/read-json";
 import { cn } from "@/lib/utils";
+import { apiFetch } from "@/lib/api-path";
 
 /**
  * 에이전트와의 채팅창.
@@ -72,7 +73,7 @@ export function AgentChat({ renderMemoRef }: Props = {}) {
   const sending = useRef(false);
 
   useEffect(() => {
-    fetch("/api/agent/chat")
+    apiFetch("/api/agent/chat")
       .then((r) => r.json())
       .then((j: { configured?: boolean }) => setEnabled(j.configured === true))
       .catch(() => setEnabled(false));
@@ -81,7 +82,7 @@ export function AgentChat({ renderMemoRef }: Props = {}) {
   const loadHistory = useCallback(async () => {
     setLoadingHistory(true);
     try {
-      const r = await fetch("/api/agent/chat?history=1");
+      const r = await apiFetch("/api/agent/chat?history=1");
       const j = await readJson<{ turns?: Turn[] }>(r);
       if (Array.isArray(j.turns)) setTurns(j.turns);
     } catch (e) {
@@ -133,7 +134,7 @@ export function AgentChat({ renderMemoRef }: Props = {}) {
   const poll = async (job: string): Promise<Status> => {
     for (;;) {
       await new Promise((r) => setTimeout(r, POLL_MS));
-      const res = await fetch(`/api/agent/chat?job=${encodeURIComponent(job)}`);
+      const res = await apiFetch(`/api/agent/chat?job=${encodeURIComponent(job)}`);
       // 404 는 "그런 작업이 없다" 이므로 오류로 던지기 전에 먼저 본다.
       if (res.status === 404) {
         // 에이전트가 다시 켜졌다. 답이 어디까지 갔는지는 기록에 남아 있다.
@@ -157,7 +158,7 @@ export function AgentChat({ renderMemoRef }: Props = {}) {
     setBusy(true);
     setProgress(null);
     try {
-      const res = await fetch("/api/agent/chat", {
+      const res = await apiFetch("/api/agent/chat", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ message }),
@@ -200,7 +201,7 @@ export function AgentChat({ renderMemoRef }: Props = {}) {
     if (!confirm("맥락과 이 창의 기록을 모두 지웁니다. Discord 쪽 맥락도 함께 사라집니다. 진행할까요?")) {
       return;
     }
-    await fetch("/api/agent/chat", { method: "DELETE" }).catch(() => undefined);
+    await apiFetch("/api/agent/chat", { method: "DELETE" }).catch(() => undefined);
     setTurns([]);
   };
 

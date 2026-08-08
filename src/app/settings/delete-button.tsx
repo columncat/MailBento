@@ -3,6 +3,7 @@
 import { Trash2 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
+import { apiFetch } from "@/lib/api-path";
 
 export function DeleteAccountButton({
   id,
@@ -42,7 +43,7 @@ export function DeleteAccountButton({
         disabled={pending}
         onClick={() =>
           startTransition(async () => {
-            await fetch(`/api/accounts?id=${id}`, { method: "DELETE" });
+            await apiFetch(`/api/accounts?id=${id}`, { method: "DELETE" });
             router.refresh();
           })
         }

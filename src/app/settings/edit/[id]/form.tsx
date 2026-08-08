@@ -6,6 +6,7 @@ import { useState } from "react";
 
 import { IconUpload } from "@/components/icon-upload";
 import { ProviderIcon } from "@/components/provider-icon";
+import { apiFetch } from "@/lib/api-path";
 
 interface Props {
   id: number;
@@ -48,7 +49,7 @@ export function EditAccountForm({
     setSaving(true);
     setError(null);
     try {
-      const res = await fetch(`/api/accounts?id=${id}`, {
+      const res = await apiFetch(`/api/accounts?id=${id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

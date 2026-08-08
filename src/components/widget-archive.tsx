@@ -7,6 +7,7 @@ import type { ArchivedSummary } from "@/lib/archive-server";
 import { cn } from "@/lib/utils";
 
 import { MarkIcon } from "./message-mark";
+import { apiFetch } from "@/lib/api-path";
 
 /** 되돌릴 수 있는 시간. 이 안에는 서버로 삭제 요청을 보내지 않는다. */
 const UNDO_MS = 6000;
@@ -57,7 +58,7 @@ export function WidgetArchive({
 
   const flush = useCallback(async (id: number) => {
     try {
-      const res = await fetch(`/api/archive/${id}`, { method: "DELETE" });
+      const res = await apiFetch(`/api/archive/${id}`, { method: "DELETE" });
       const json = await res.json();
       if (res.ok) onChangeRef.current(json.list ?? []);
     } catch {
@@ -115,7 +116,7 @@ export function WidgetArchive({
     const byId = new Map(items.map((i) => [i.id, i]));
     onChange(ids.map((id) => byId.get(id)!).filter(Boolean));
     try {
-      const res = await fetch("/api/archive/reorder", {
+      const res = await apiFetch("/api/archive/reorder", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ orderedIds: ids }),

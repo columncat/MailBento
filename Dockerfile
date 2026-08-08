@@ -17,6 +17,11 @@ RUN npm ci
 FROM base AS builder
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+
+# 하위 경로 배포용. 비우면 뿌리에서 돈다.
+# Next 가 이 값을 산출물 곳곳에 미리 심으므로 런타임에는 바꿀 수 없다.
+ARG BASE_PATH=""
+ENV BASE_PATH=$BASE_PATH
 # 빌드 시점 더미 키 (실제 값은 런타임에 주입 — 이미지에 시크릿 미포함)
 ENV ENCRYPTION_KEY=build-time-dummy-not-used-at-runtime
 RUN npm run build

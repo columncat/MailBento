@@ -49,6 +49,7 @@ import { WidgetSideWing } from "./widget-side-wing";
 import type { ArchivedSummary } from "@/lib/archive-server";
 import type { RegionInput } from "@/lib/regions";
 import { MessageModal } from "./message-modal";
+import { apiFetch } from "@/lib/api-path";
 
 export interface AccountSummary {
   id: number;
@@ -157,7 +158,7 @@ export function Dashboard({
 
   const loadArchived = useCallback(async () => {
     try {
-      const res = await fetch("/api/archive", { cache: "no-store" });
+      const res = await apiFetch("/api/archive", { cache: "no-store" });
       const json = await res.json();
       if (res.ok) setArchived(json.archived ?? []);
     } catch {
@@ -174,7 +175,7 @@ export function Dashboard({
   const persist = useCallback((next: WidgetState) => {
     if (saveTimer.current) clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => {
-      void fetch("/api/widget", {
+      void apiFetch("/api/widget", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(next),
@@ -320,7 +321,7 @@ export function Dashboard({
       const newIdx = prev.findIndex((b) => b.account.id === over.id);
       if (oldIdx < 0 || newIdx < 0) return prev;
       const next = arrayMove(prev, oldIdx, newIdx);
-      void fetch("/api/accounts/reorder", {
+      void apiFetch("/api/accounts/reorder", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

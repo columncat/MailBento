@@ -20,6 +20,9 @@ services:
     container_name: MailBento
     build:
       context: ./src/MailBento
+      args:
+        # 하위 경로에 얹을 때만 채운다 (예: /mail). 옆의 .env 에서 읽는다.
+        BASE_PATH: "${MAILBENTO_BASE_PATH:-}"
     restart: unless-stopped
     ports:
       - "${MAILBENTO_PORT:-3000}:3000"
@@ -33,6 +36,8 @@ services:
     container_name: MemoBento
     build:
       context: ./src/MemoBento
+      args:
+        BASE_PATH: "${MEMOBENTO_BASE_PATH:-}"
     restart: unless-stopped
     ports:
       - "${MEMOBENTO_PORT:-3001}:3000"
