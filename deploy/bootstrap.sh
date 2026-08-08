@@ -11,6 +11,11 @@ set -euo pipefail
 
 cd "$(dirname "$0")"
 
+# 저장소에서 받은 것으로 자신을 갈아 끼울 수 있으므로, 시작할 때의 모습을
+# 기억해 둔다 (아래에서 바뀌었는지 비교한다).
+BOOTSTRAP_HASH="$(cksum < "$0")"
+export BOOTSTRAP_HASH
+
 OWNER="${BENTO_GITHUB_OWNER:-columncat}"
 REF="${BENTO_REF:-main}"
 REPOS="MailBento MemoBento BentoAgent"
@@ -46,6 +51,30 @@ for r in $REPOS; do
     fi
   fi
 done
+
+# 스택 정의는 MailBento 저장소가 들고 있다. 처음 받아 둔 사본을 그대로 두면
+# compose 가 바뀌어도 반영되지 않는다 — 볼륨을 하나 더 물리게 됐는데도 옛
+# 정의로 계속 뜨는 식이다. 받은 것으로 맞춘다.
+#
+# 이 파일에는 이 기계에만 해당하는 값이 없다. 포트 같은 것은 옆의 .env 에서
+# 읽으므로 덮어써도 잃을 것이 없다.
+for f in docker-compose.yml bootstrap.sh; do
+  src="src/MailBento/deploy/$f"
+  [ -f "$src" ] || continue
+  if ! cmp -s "$src" "$f"; then
+    echo "── $f 갱신"
+    cp "$src" "$f"
+    [ "$f" = "bootstrap.sh" ] && chmod +x "$f"
+  fi
+done
+
+# bootstrap.sh 자신이 바뀌었으면 새 것으로 다시 시작한다. 낡은 절차로 끝까지
+# 가면 방금 받은 정의와 어긋난다.
+if [ "${BENTO_RESPAWNED:-}" != "1" ] && [ -n "${BOOTSTRAP_HASH:-}" ] \
+   && [ "$BOOTSTRAP_HASH" != "$(cksum < bootstrap.sh)" ]; then
+  echo "── bootstrap.sh 가 바뀌었습니다. 새 것으로 다시 시작합니다."
+  BENTO_RESPAWNED=1 exec ./bootstrap.sh "$@"
+fi
 
 echo "── 빌드"
 $COMPOSE build
