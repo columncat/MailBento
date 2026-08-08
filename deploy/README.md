@@ -22,9 +22,18 @@ chmod +x bootstrap.sh
 
 ### BentoAgent 는 비공개 저장소다
 
-이 기계에 GitHub 자격이 없으면 받아 오지 못한다. 그때는 소스를
-`src/BentoAgent` 에 직접 올려 두고 `./bootstrap.sh` 를 다시 돌린다 — 이미
-있으면 그대로 쓴다.
+받으려면 이 기계에 GitHub 자격이 있어야 한다. 가장 간단한 길:
+
+```sh
+gh auth login        # repo 권한 필요
+```
+
+`gh` 가 git 자격 헬퍼를 걸어 주므로 그다음부터는 `./bootstrap.sh` 가 알아서
+받는다. ssh 키를 쓴다면 `BENTO_GITHUB_OWNER` 대신 원격 주소를 손보면 된다.
+
+자격을 둘 수 없는 기계라면 소스를 `src/BentoAgent` 에 직접 올려 두고
+`./bootstrap.sh` 를 돌린다 — 이미 있으면 그대로 쓴다. 다만 그 경우
+`./bootstrap.sh` 로 갱신되지 않으니 올릴 때마다 손으로 바꿔야 한다.
 
 ## 마법사가 받는 것
 
