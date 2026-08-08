@@ -252,7 +252,7 @@ export function Dashboard({
     try {
       // force = IMAP 재조회. 손으로 누른 새로고침만 쓴다 —
       // 주기적인 수집은 서버가 스스로 한다(lib/mail-poller).
-      const res = await fetch(force ? "/api/mail?force=1" : "/api/mail", {
+      const res = await apiFetch(force ? "/api/mail?force=1" : "/api/mail", {
         cache: "no-store",
         signal: ac.signal,
       });

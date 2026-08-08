@@ -1,6 +1,7 @@
 "use client";
 
 import { Copy, Loader2, Pencil, Trash2 } from "lucide-react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { apiFetch } from "@/lib/api-path";
@@ -60,14 +61,19 @@ export function AccountActions({ id, email, canDuplicate }: Props) {
 
   return (
     <div className="flex items-center gap-0.5">
-      <a
+      {/*
+        생 <a> 가 아니라 <Link> 여야 한다. Next 가 접두어를 붙여 주는 것은
+        제 도구를 쓸 때뿐이라, 하위 경로 배포에서 이 링크만 도메인 뿌리의
+        없는 자리로 갔다 — 계정 편집이 열리지 않았다.
+      */}
+      <Link
         href={`/settings/edit/${id}`}
         className="grid h-8 w-8 place-items-center rounded-md text-(--color-fg-4) hover:bg-(--color-surface-2) hover:text-(--color-fg-2)"
         aria-label="편집"
         title="편집"
       >
         <Pencil className="h-3.5 w-3.5" />
-      </a>
+      </Link>
       {canDuplicate && (
         <button
           type="button"

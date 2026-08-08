@@ -6,6 +6,7 @@ import { useCallback, useEffect, useState } from "react";
 
 import type { MessageMark } from "@/lib/db/schema";
 import { cn } from "@/lib/utils";
+import { apiFetch } from "@/lib/api-path";
 import type { MailMessageDetail } from "@/lib/providers/types";
 
 import { MarkPicker } from "./message-mark";
@@ -61,7 +62,7 @@ export function MessageModal({
         const url = archiveId
           ? `/api/archive/${archiveId}`
           : `/api/mail/${accountId}/${encodeURIComponent(messageId)}`;
-        await fetch(url, {
+        await apiFetch(url, {
           method: "PATCH",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(patch),
@@ -90,7 +91,7 @@ export function MessageModal({
     const url = archiveId
       ? `/api/archive/${archiveId}`
       : `/api/mail/${accountId}/${encodeURIComponent(messageId)}`;
-    fetch(url, { signal: ac.signal, cache: "no-store" })
+    apiFetch(url, { signal: ac.signal, cache: "no-store" })
       .then(async (res) => {
         const json = await res.json();
         if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);

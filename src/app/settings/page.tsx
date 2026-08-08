@@ -11,6 +11,7 @@ import { AgentPanel } from "./agent-panel";
 import { PreferencesPanel } from "./preferences-panel";
 import { RegionsSetting } from "./regions-setting";
 import { SettingsIO } from "./settings-io";
+import { apiPath } from "@/lib/api-path";
 
 export const dynamic = "force-dynamic";
 
@@ -49,7 +50,7 @@ export default async function SettingsPage({
                 <Clock className="h-3.5 w-3.5" />
                 로그인 기록
               </Link>
-              <form action="/api/logout" method="POST">
+              <form action={apiPath("/api/logout")} method="POST">
                 <button
                   type="submit"
                   className="flex items-center gap-1.5 rounded-full bg-(--color-surface) px-3 py-1.5 text-xs text-(--color-fg-3) ring-1 ring-(--color-border-soft) transition hover:bg-(--color-danger)/15 hover:text-(--color-danger)"
