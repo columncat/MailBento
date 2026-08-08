@@ -50,6 +50,15 @@ done
 echo "── 빌드"
 $COMPOSE build
 
+# 두 앱은 컨테이너 안에서 nodejs(uid 1001)로 돈다. 그런데 여기서 만든 폴더는
+# 이 계정(대개 uid 1000) 소유라, 그대로 두면 앱이 설정을 읽지도 데이터를
+# 쓰지도 못한다. 호스트에 sudo 가 없어도 되도록 컨테이너 안에서 바로잡는다.
+echo "── 권한 맞추기"
+$COMPOSE run --rm --no-deps --user 0 --entrypoint sh mailbento \
+  -c 'chown -R 1001:1001 /config /app/data' >/dev/null
+$COMPOSE run --rm --no-deps --user 0 --entrypoint sh memobento \
+  -c 'chown -R 1001:1001 /app/data' >/dev/null
+
 echo "── 시작"
 $COMPOSE up -d
 

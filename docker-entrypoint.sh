@@ -13,9 +13,26 @@ CONFIG_DIR="${BENTO_CONFIG_DIR:-/config}"
 CONFIG="$CONFIG_DIR/mailbento.env"
 DONE="$CONFIG_DIR/setup.json"
 
+# 마법사가 여기에 적어야 한다. 못 적으면 폼을 다 채운 뒤에야 실패하므로
+# 시작할 때 미리 확인한다.
+if [ ! -w "$CONFIG_DIR" ]; then
+  echo "[mailbento] $CONFIG_DIR 에 쓸 수 없습니다 (지금 uid=$(id -u))." >&2
+  echo "  호스트 폴더의 주인이 다릅니다. 스택 폴더에서 아래를 한 번 돌리세요:" >&2
+  echo "    docker compose run --rm --no-deps --user 0 --entrypoint sh mailbento \\" >&2
+  echo "      -c 'chown -R 1001:1001 /config /app/data'" >&2
+  echo "  bootstrap.sh 로 띄우면 이 일을 알아서 합니다." >&2
+  exit 1
+fi
+
 if [ ! -f "$DONE" ] || [ ! -f "$CONFIG" ]; then
   echo "[mailbento] 설정이 없습니다 — 설치 마법사를 엽니다."
   exec node /app/setup/server.js
+fi
+
+if [ ! -r "$CONFIG" ]; then
+  echo "[mailbento] $CONFIG 를 읽을 수 없습니다 (지금 uid=$(id -u))." >&2
+  echo "  위와 같은 chown 을 한 번 돌리면 됩니다." >&2
+  exit 1
 fi
 
 # set -a 로 감싸면 이 파일의 값이 그대로 환경변수가 된다.
