@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 
+import { apiPath } from "./api-path";
+
 /**
  * 같은 오리진 안에서의 리다이렉트.
  *
@@ -22,7 +24,11 @@ export function redirectTo(
   path: string,
   status: 303 | 307 = 307,
 ): NextResponse {
-  const safe = safePath(path);
+  // 하위 경로 배포에서는 접두어를 직접 붙여야 한다. Next 가 알아서 붙여 주는
+  // 것은 `redirect()` 와 `<Link>` 같은 제 도구를 쓸 때뿐이고, 이렇게 Location
+  // 헤더를 손으로 만들면 그대로 나간다 — 로그아웃과 자동 갱신이 도메인 뿌리의
+  // 없는 자리로 떨어진다.
+  const safe = apiPath(safePath(path));
   return new NextResponse(null, { status, headers: { Location: safe } });
 }
 
