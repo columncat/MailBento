@@ -39,6 +39,10 @@ services:
     volumes:
       - ./config:/config
       - ./data/memobento:/app/data
+      # 메일함의 DB 를 그대로 본다. Corkboard 와 Memo 메모함은 두 앱이 같은
+      # 자료를 쓰기 때문에, 이 마운트가 없으면 한쪽에서 고친 것이 다른 쪽에
+      # 보이지 않는다.
+      - ./data/mailbento:/app/mailbento
     networks: [bento]
     depends_on: [mailbento]
 

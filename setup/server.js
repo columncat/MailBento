@@ -295,6 +295,9 @@ function save(input) {
       ...shared,
       MAILBENTO_URL: pick(input.mailbentoUrl),
       MAX_UPLOAD_MB: pick(input.maxUploadMb) || "5120",
+      // Corkboard 와 Memo 메모함은 메일함과 같은 자료를 쓴다. 이 경로가 없으면
+      // 두 앱이 각자의 사본을 보게 되어 한쪽에서 고친 것이 다른 쪽에 안 보인다.
+      MAILBENTO_DB_PATH: "/app/mailbento/mailbento.db",
     }),
     { mode: 0o600 },
   );
