@@ -1,0 +1,71 @@
+# ============================================================
+# Bento — 메일함 · 메모함 · 에이전트 한 벌
+# ============================================================
+#
+#   ./bootstrap.sh          저장소를 받아 세 컨테이너를 띄운다
+#
+# 그리고 브라우저로 http://<주소>:3000 을 열면 설치 마법사가 뜬다. 거기서
+# 값을 채우면 세 서비스가 이어서 올라온다.
+#
+# 빌드 자리를 ./src 로 두는 이유는 BentoAgent 가 비공개 저장소이기 때문이다.
+# 도커에게 git 주소를 그대로 주면 도커가 스스로 받아야 하는데, 그러려면
+# 도커 데몬에 자격 증명을 쥐여 줘야 한다. 받는 일은 사람 계정으로 하고
+# 도커에게는 받아 둔 폴더만 준다.
+
+name: MailBento
+
+services:
+  # 3000 번. 사람이 처음 닿는 곳이라 설치 마법사도 여기서 뜬다.
+  mailbento:
+    container_name: MailBento
+    build:
+      context: ./src/MailBento
+    restart: unless-stopped
+    ports:
+      - "${MAILBENTO_PORT:-3000}:3000"
+    volumes:
+      - ./config:/config
+      - ./data/mailbento:/app/data
+    networks: [bento]
+
+  # 3001 번(안에서는 3000). 메모·파일이 사는 곳.
+  memobento:
+    container_name: MemoBento
+    build:
+      context: ./src/MemoBento
+    restart: unless-stopped
+    ports:
+      - "${MEMOBENTO_PORT:-3001}:3000"
+    volumes:
+      - ./config:/config
+      - ./data/memobento:/app/data
+    networks: [bento]
+    depends_on: [mailbento]
+
+  # 4000 번. 두 앱의 채팅창이 서버끼리 부르는 입구다.
+  #
+  # 밖으로는 127.0.0.1 에만 연다. 두 앱은 같은 네트워크 안에서 서비스 이름으로
+  # 부르므로 이 포트가 없어도 채팅창은 그대로 돈다 — 열어 두는 것은 같은
+  # 기계에서 손으로 확인할 때를 위해서다.
+  bentoagent:
+    container_name: BentoAgent
+    build:
+      context: ./src/BentoAgent
+      args:
+        MEMOBENTO_REF: main
+        MAILBENTO_REF: main
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${AGENT_PORT:-4000}:4000"
+    volumes:
+      - ./config:/config
+      - ./data/bentoagent:/app/data
+      # 대화 자체는 claude 가 자기 홈에 적는다. 밖에 둬야 다시 빌드해도
+      # 하던 얘기가 남는다.
+      - ./data/claude-home:/home/agent/.claude
+    networks: [bento]
+    depends_on: [mailbento]
+
+networks:
+  bento:
+    driver: bridge

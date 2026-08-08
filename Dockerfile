@@ -37,9 +37,15 @@ COPY --from=builder /app/.next/standalone ./
 COPY --from=builder /app/.next/static ./.next/static
 COPY --from=builder /app/drizzle ./drizzle
 
+# 설치 마법사와 진입 스크립트 — 설정이 없는 새 기계에서 처음 뜨는 화면이다.
+COPY setup ./setup
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
 # DB 영속 디렉터리 (compose 볼륨으로 마운트)
-RUN mkdir -p /app/data && chown -R nodejs:nodejs /app
+# /config 는 세 컨테이너가 함께 보는 자리다. 마법사가 여기에 적는다.
+RUN mkdir -p /app/data /config && chown -R nodejs:nodejs /app /config
 USER nodejs
 
 EXPOSE 3000
-CMD ["node", "server.js"]
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]

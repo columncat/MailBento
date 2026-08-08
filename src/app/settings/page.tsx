@@ -7,6 +7,7 @@ import { isAuthEnabled } from "@/lib/auth";
 import { db, schema } from "@/lib/db";
 
 import { AccountActions } from "./account-actions";
+import { AgentPanel } from "./agent-panel";
 import { PreferencesPanel } from "./preferences-panel";
 import { RegionsSetting } from "./regions-setting";
 import { SettingsIO } from "./settings-io";
@@ -145,6 +146,9 @@ export default async function SettingsPage({
         </p>
         <RegionsSetting initial={appConfig.regions} />
       </section>
+
+      {/* 에이전트 — Claude 인증 갱신과 Discord 켜고 끄기 */}
+      <AgentPanel />
 
       {/* 표시 설정 */}
       <PreferencesPanel />
