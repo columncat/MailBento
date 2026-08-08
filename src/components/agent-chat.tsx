@@ -4,6 +4,7 @@ import { Loader2, RotateCcw, Send, Sparkles, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { RichText, type MemoSlot } from "@/components/rich-text";
+import { isUnauthenticated, readJson } from "@/lib/read-json";
 import { cn } from "@/lib/utils";
 
 /**
@@ -81,10 +82,21 @@ export function AgentChat({ renderMemoRef }: Props = {}) {
     setLoadingHistory(true);
     try {
       const r = await fetch("/api/agent/chat?history=1");
-      const j = (await r.json()) as { turns?: Turn[] };
+      const j = await readJson<{ turns?: Turn[] }>(r);
       if (Array.isArray(j.turns)) setTurns(j.turns);
-    } catch {
-      /* 기록을 못 불러와도 새로 대화할 수는 있다 */
+    } catch (e) {
+      // 못 불러와도 새로 대화할 수는 있다. 다만 조용히 넘기면 지난 대화가
+      // 없는 것처럼 보이므로, 왜 비었는지는 한 줄 남긴다.
+      setTurns([
+        {
+          role: "agent",
+          text: isUnauthenticated(e)
+            ? "로그인이 풀려 지난 대화를 불러오지 못했습니다. 새로고침해 주세요."
+            : `지난 대화를 불러오지 못했습니다: ${e instanceof Error ? e.message : String(e)}`,
+          at: Date.now(),
+          error: true,
+        },
+      ]);
     } finally {
       setLoadingHistory(false);
     }
@@ -122,13 +134,13 @@ export function AgentChat({ renderMemoRef }: Props = {}) {
     for (;;) {
       await new Promise((r) => setTimeout(r, POLL_MS));
       const res = await fetch(`/api/agent/chat?job=${encodeURIComponent(job)}`);
-      const json = (await res.json()) as Status & { gone?: boolean; error?: string };
-      if (json.gone) {
+      // 404 는 "그런 작업이 없다" 이므로 오류로 던지기 전에 먼저 본다.
+      if (res.status === 404) {
         // 에이전트가 다시 켜졌다. 답이 어디까지 갔는지는 기록에 남아 있다.
         await loadHistory();
         throw new Error("에이전트가 다시 시작되어 이 요청은 사라졌습니다");
       }
-      if (!res.ok) throw new Error(json.error ?? `상태 확인 실패 (${res.status})`);
+      const json = await readJson<Status>(res);
       setProgress(json);
       if (json.state === "done") return json;
     }
@@ -150,10 +162,8 @@ export function AgentChat({ renderMemoRef }: Props = {}) {
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ message }),
       });
-      const started = (await res.json()) as { id?: string; error?: string };
-      if (!res.ok || !started.id) {
-        throw new Error(started.error ?? `시작하지 못했습니다 (${res.status})`);
-      }
+      const started = await readJson<{ id?: string }>(res);
+      if (!started.id) throw new Error("에이전트가 작업 번호를 주지 않았습니다");
       const done = await poll(started.id);
       setTurns((t) => [
         ...t,
@@ -170,7 +180,11 @@ export function AgentChat({ renderMemoRef }: Props = {}) {
         ...t,
         {
           role: "agent",
-          text: e instanceof Error ? e.message : String(e),
+          text: isUnauthenticated(e)
+            ? "로그인이 풀렸습니다. 새로고침해서 다시 로그인한 뒤 이어 주세요. 보낸 말은 서버에서 계속 처리되고 있을 수 있습니다."
+            : e instanceof Error
+              ? e.message
+              : String(e),
           at: Date.now(),
           error: true,
         },

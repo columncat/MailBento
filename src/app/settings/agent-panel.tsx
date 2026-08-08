@@ -3,6 +3,7 @@
 import { Loader2 } from "lucide-react";
 import { useCallback, useEffect, useState } from "react";
 
+import { readJson } from "@/lib/read-json";
 import { cn } from "@/lib/utils";
 
 /**
@@ -45,8 +46,7 @@ export function AgentPanel() {
   const load = useCallback(async () => {
     try {
       const r = await fetch("/api/agent/config", { cache: "no-store" });
-      const j = (await r.json()) as Settings & { error?: string };
-      if (!r.ok) throw new Error(j.error ?? `불러오지 못했습니다 (${r.status})`);
+      const j = await readJson<Settings>(r);
       setS(j);
       setModel(j.model ?? "");
       setErr(null);
@@ -69,8 +69,7 @@ export function AgentPanel() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(patch),
       });
-      const j = (await r.json()) as { changed?: boolean; error?: string };
-      if (!r.ok) throw new Error(j.error ?? `저장하지 못했습니다 (${r.status})`);
+      const j = await readJson<{ changed?: boolean }>(r);
       if (j.changed) {
         setMsg("저장했습니다. 에이전트가 다시 시작합니다 (10초쯤).");
         setOauth("");
