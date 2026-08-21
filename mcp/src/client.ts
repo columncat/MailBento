@@ -12,6 +12,18 @@ export interface ClientOptions {
   timeoutMs: number;
 }
 
+/**
+ * 베이스 주소와 경로 잇기.
+ *
+ * `new URL("/api/…", base)` 를 쓰면 안 된다. 절대 경로는 베이스의 **경로를
+ * 버린다.** 하위 경로에 얹은 배포(`http://memobento:3000/memo`)에서는 그
+ * `/memo` 가 사라져 부르는 것마다 404 가 됐다.
+ */
+function join(baseUrl: string, path: string): string {
+  const base = baseUrl.replace(/\/+$/, "");
+  return base + (path.startsWith("/") ? path : `/${path}`);
+}
+
 export class MailBentoError extends Error {
   constructor(
     message: string,
@@ -76,7 +88,7 @@ export class MailBentoClient {
     const ctl = new AbortController();
     const timer = setTimeout(() => ctl.abort(), this.opts.timeoutMs);
     try {
-      const res = await fetch(new URL(path, this.opts.baseUrl), {
+      const res = await fetch(join(this.opts.baseUrl, path), {
         method,
         // 307 을 그대로 보아야 "세션 만료" 를 알아챌 수 있다. 따라가 버리면
         // 로그인 페이지 HTML 이 200 으로 도착해 JSON 파싱에서 터진다.
