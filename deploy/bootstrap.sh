@@ -76,6 +76,12 @@ if [ "${BENTO_RESPAWNED:-}" != "1" ] && [ -n "${BOOTSTRAP_HASH:-}" ] \
   BENTO_RESPAWNED=1 exec ./bootstrap.sh "$@"
 fi
 
+# 에이전트 이미지는 두 앱의 mcp/ 를 GitHub 에서 받아 만든다. 도커가 그 층을
+# 캐시하므로 저장소가 바뀐 날에는 값을 바꿔 줘야 다시 받는다. 그러지 않으면
+# 앱 API 가 바뀐 날 에이전트만 옛 MCP 를 들고 조용히 404 를 받는다.
+BENTO_MCP_CACHEBUST="$(git -C src/MemoBento rev-parse --short HEAD 2>/dev/null || echo x)-$(git -C src/MailBento rev-parse --short HEAD 2>/dev/null || echo x)"
+export BENTO_MCP_CACHEBUST
+
 echo "── 빌드"
 $COMPOSE build
 

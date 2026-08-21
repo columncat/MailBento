@@ -69,6 +69,8 @@ services:
     build:
       context: ./src/BentoAgent
       args:
+        # 두 앱의 mcp/ 를 언제 다시 받을지. bootstrap.sh 가 최근 커밋을 넣는다.
+        MCP_CACHEBUST: "${BENTO_MCP_CACHEBUST:-}"
         MEMOBENTO_REF: main
         MAILBENTO_REF: main
     restart: unless-stopped
