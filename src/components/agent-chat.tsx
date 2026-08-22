@@ -28,7 +28,6 @@ interface Turn {
   error?: boolean;
 }
 
-/** 진행 중인 요청의 상태. 에이전트가 도구를 부를 때마다 값이 바뀐다. */
 /** 올려 두고 아직 안 보낸 파일. */
 interface Attached {
   id: string;
@@ -38,6 +37,7 @@ interface Attached {
   shown: boolean;
 }
 
+/** 진행 중인 요청의 상태. 에이전트가 도구를 부를 때마다 값이 바뀐다. */
 interface Status {
   state: "running" | "done";
   elapsedMs: number;
@@ -170,10 +170,12 @@ export function AgentChat({ renderMemoRef }: Props = {}) {
   };
 
   /** 고른 파일을 그 자리에서 올린다. 실패한 것은 말해 준다. */
-  const attach = async (files: FileList | null) => {
-    if (!files || files.length === 0) return;
+  const attach = async (files: FileList | File[] | null) => {
+    if (!files) return;
+    const list = [...files];
+    if (list.length === 0) return;
     const room = 5 - attached.length;
-    const picked = [...files].slice(0, Math.max(0, room));
+    const picked = list.slice(0, Math.max(0, room));
     if (picked.length === 0) return;
 
     setUploading((n) => n + picked.length);
@@ -201,6 +203,39 @@ export function AgentChat({ renderMemoRef }: Props = {}) {
         setUploading((n) => Math.max(0, n - 1));
       }
     }
+  };
+
+  /*
+   * 붙여넣기로 들어온 그림.
+   *
+   * 화면을 캡처해 바로 주는 것이 가장 잦은 쓰임인데, 그때마다 파일로 저장해
+   * 다시 고르게 하는 것은 번거롭다.
+   *
+   * 이름을 갈아 준다. 캡처는 대개 `image.png` 라는 한 가지 이름으로 오는데,
+   * 그대로 두면 Inbox 에 같은 이름이 줄줄이 쌓여 무엇이 무엇인지 알 수 없다.
+   * 보낸 쪽이 제 이름을 붙여 온 것은 건드리지 않는다.
+   */
+  const onPaste = (e: React.ClipboardEvent) => {
+    const items = [...(e.clipboardData?.items ?? [])];
+    const files = items
+      .filter((it) => it.kind === "file")
+      .map((it) => it.getAsFile())
+      .filter((f): f is File => f !== null);
+    if (files.length === 0) return;
+    // 글도 함께 들어 있으면 글은 그대로 붙게 두고 파일만 가져간다.
+    if (!items.some((it) => it.kind === "string")) e.preventDefault();
+
+    const stamped = files.map((f) => {
+      if (f.name && !/^image\.\w+$/i.test(f.name)) return f;
+      const d = new Date();
+      const p = (n: number) => String(n).padStart(2, "0");
+      const ext = (f.type.split("/")[1] || "png").replace(/[^a-z0-9]/gi, "");
+      const name =
+        `붙여넣기 ${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ` +
+        `${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}.${ext}`;
+      return new File([f], name, { type: f.type });
+    });
+    void attach(stamped);
   };
 
   const send = async () => {
@@ -465,8 +500,9 @@ export function AgentChat({ renderMemoRef }: Props = {}) {
                     void send();
                   }
                 }}
+                onPaste={onPaste}
                 rows={2}
-                placeholder="무엇을 할까요? (Enter 로 전송, Shift+Enter 로 줄바꿈)"
+                placeholder="무엇을 할까요? (Enter 로 전송, 그림은 붙여넣기도 됩니다)"
                 className="scrollbar-thin min-w-0 flex-1 resize-none rounded-lg bg-(--color-bg-2) px-3.5 py-2.5 text-sm text-(--color-fg) ring-1 ring-(--color-border-soft) outline-none placeholder:text-(--color-fg-4) focus:ring-(--color-accent)/60"
               />
               <button
