@@ -31,7 +31,11 @@ const AGENT_TOKEN = process.env.AGENT_TOKEN?.trim();
  */
 const TIMEOUT_MS = 15_000;
 
-const bodySchema = z.object({ message: z.string().trim().min(1).max(8000) });
+const bodySchema = z.object({
+  message: z.string().trim().max(8000).default(""),
+  /** 먼저 올려 둔 파일의 번호들. 파일만 보내는 것도 된다. */
+  attachments: z.array(z.string().min(1).max(64)).max(5).optional(),
+});
 
 function unconfigured() {
   return NextResponse.json(
@@ -97,30 +101,6 @@ export async function GET(req: Request) {
     }
   }
 
-  /*
-   * 답변 속 `[[memo:…]]` 를 그릴 재료.
-   *
-   * 이 앱은 MemoBento 를 모른다 — 자격 증명도 없고, 줄 이유도 없다. 대신 이미
-   * 이 다리를 거쳐 대화하고 있으니 재료도 같은 길로 받아 온다.
-   */
-  const memoIds = new URL(req.url).searchParams.get("memos");
-  if (memoIds) {
-    const ctl = new AbortController();
-    const timer = setTimeout(() => ctl.abort(), 8000);
-    try {
-      const res = await fetch(
-        new URL(`/memos?ids=${encodeURIComponent(memoIds)}`, AGENT_URL),
-        { headers: { authorization: `Bearer ${AGENT_TOKEN}` }, signal: ctl.signal },
-      );
-      const text = await res.text();
-      return NextResponse.json(text ? JSON.parse(text) : { memos: [] });
-    } catch {
-      return NextResponse.json({ memos: [] });
-    } finally {
-      clearTimeout(timer);
-    }
-  }
-
   // 진행 중인 작업 물어보기. 화면이 몇 초마다 부른다.
   const job = new URL(req.url).searchParams.get("job");
   if (job) {
@@ -161,8 +141,12 @@ export async function POST(req: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: "message 가 필요합니다" }, { status: 400 });
   }
+  const { message, attachments } = parsed.data;
+  if (!message && (attachments?.length ?? 0) === 0) {
+    return NextResponse.json({ error: "보낼 것이 없습니다" }, { status: 400 });
+  }
   // 시작만 시키고 번호를 받는다. 답은 화면이 따로 물어본다.
-  return forward("/chat/start", { message: parsed.data.message, from: "mailbento" });
+  return forward("/chat/start", { message, attachments, from: "mailbento" });
 }
 
 /** 새 대화 — 에이전트 쪽 세션을 버린다 (Discord 맥락도 함께 사라진다). */

@@ -1,6 +1,6 @@
 "use client";
 
-import { Loader2, RotateCcw, Send, Sparkles, X } from "lucide-react";
+import { Loader2, Paperclip, RotateCcw, Send, Sparkles, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import { RichText, type MemoSlot } from "@/components/rich-text";
@@ -29,6 +29,15 @@ interface Turn {
 }
 
 /** 진행 중인 요청의 상태. 에이전트가 도구를 부를 때마다 값이 바뀐다. */
+/** 올려 두고 아직 안 보낸 파일. */
+interface Attached {
+  id: string;
+  name: string;
+  kind: string;
+  /** 모델이 내용을 그대로 볼 수 있는 것인가 (그림·PDF). */
+  shown: boolean;
+}
+
 interface Status {
   state: "running" | "done";
   elapsedMs: number;
@@ -66,6 +75,19 @@ export function AgentChat({ renderMemoRef }: Props = {}) {
   const [loadingHistory, setLoadingHistory] = useState(false);
   const [draft, setDraft] = useState("");
   const [busy, setBusy] = useState(false);
+  /*
+   * 붙여 놓고 아직 안 보낸 파일.
+   *
+   * 고르는 즉시 올린다. 보낼 때 한꺼번에 올리면 25MB 짜리를 기다리는 동안
+   * 아무 표시가 없고, 앞의 터널이 100초에서 끊는다. 먼저 올려 두면 보내는
+   * 요청은 번호만 실어 짧게 끝난다.
+   *
+   * 올라간 파일은 그 자리에서 이미 Inbox 메모함에 들어간다. 여기서 지워도
+   * 그건 "이번 말에 딸려 보내지 않는다" 는 뜻이지, 파일이 사라지는 것은 아니다.
+   */
+  const [attached, setAttached] = useState<Attached[]>([]);
+  const [uploading, setUploading] = useState(0);
+  const fileRef = useRef<HTMLInputElement | null>(null);
   const [progress, setProgress] = useState<Status | null>(null);
   const endRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLTextAreaElement | null>(null);
@@ -147,21 +169,72 @@ export function AgentChat({ renderMemoRef }: Props = {}) {
     }
   };
 
+  /** 고른 파일을 그 자리에서 올린다. 실패한 것은 말해 준다. */
+  const attach = async (files: FileList | null) => {
+    if (!files || files.length === 0) return;
+    const room = 5 - attached.length;
+    const picked = [...files].slice(0, Math.max(0, room));
+    if (picked.length === 0) return;
+
+    setUploading((n) => n + picked.length);
+    for (const file of picked) {
+      const form = new FormData();
+      form.append("file", file, file.name);
+      try {
+        const res = await apiFetch("/api/agent/upload", { method: "POST", body: form });
+        const j = await readJson<Attached & { error?: string }>(res);
+        if (!j.id) throw new Error(j.error || "올리지 못했습니다");
+        setAttached((prev) => [...prev, { id: j.id, name: j.name, kind: j.kind, shown: !!j.shown }]);
+      } catch (e) {
+        setTurns((t) => [
+          ...t,
+          {
+            role: "agent",
+            text: `${file.name} 을 올리지 못했습니다: ${
+              e instanceof Error ? e.message : String(e)
+            }`,
+            at: Date.now(),
+            error: true,
+          },
+        ]);
+      } finally {
+        setUploading((n) => Math.max(0, n - 1));
+      }
+    }
+  };
+
   const send = async () => {
     const message = draft.trim();
     // busy 는 상태라 곧바로 반영되지 않는다. Enter 를 연달아 치면 둘 다
     // 통과해서 같은 질문이 두 번 들어간다. 문지기는 ref 로 둔다.
-    if (!message || sending.current) return;
+    // 파일만 보내는 것도 말이 된다. 글이 없다는 이유로 버리지 않는다.
+    if ((!message && attached.length === 0) || sending.current) return;
     sending.current = true;
+    const files = attached;
     setDraft("");
-    setTurns((t) => [...t, { role: "me", text: message, at: Date.now() }]);
+    setAttached([]);
+    setTurns((t) => [
+      ...t,
+      {
+        role: "me",
+        text:
+          message +
+          (files.length
+            ? `${message ? "\n\n" : ""}[보낸 파일] ${files.map((f) => f.name).join(", ")}`
+            : ""),
+        at: Date.now(),
+      },
+    ]);
     setBusy(true);
     setProgress(null);
     try {
       const res = await apiFetch("/api/agent/chat", {
         method: "POST",
         headers: { "content-type": "application/json" },
-        body: JSON.stringify({ message }),
+        body: JSON.stringify({
+          message,
+          ...(files.length ? { attachments: files.map((f) => f.id) } : {}),
+        }),
       });
       const started = await readJson<{ id?: string }>(res);
       if (!started.id) throw new Error("에이전트가 작업 번호를 주지 않았습니다");
@@ -271,7 +344,7 @@ export function AgentChat({ renderMemoRef }: Props = {}) {
               )}
               {!loadingHistory && turns.length === 0 && (
                 <p className="px-1 py-12 text-center text-sm break-keep text-(--color-fg-4)">
-                  메일함과 메모함을 읽고 고칠 수 있습니다.
+                  메모함과 메일함을 읽고 고칠 수 있습니다.
                   <br />
                   &ldquo;오늘 안 읽은 메일 정리해줘&rdquo; 처럼 말해 보세요.
                 </p>
@@ -330,8 +403,58 @@ export function AgentChat({ renderMemoRef }: Props = {}) {
                 e.preventDefault();
                 void send();
               }}
-              className="flex shrink-0 gap-2 border-t border-(--color-border-soft) px-4 py-3.5"
+              className="flex shrink-0 flex-col gap-2 border-t border-(--color-border-soft) px-4 py-3.5"
             >
+              {(attached.length > 0 || uploading > 0) && (
+                <div className="flex flex-wrap gap-1.5">
+                  {attached.map((f) => (
+                    <span
+                      key={f.id}
+                      className="flex max-w-full items-center gap-1 rounded-full bg-(--color-bg-2) py-1 pr-1 pl-2.5 text-[11px] text-(--color-fg-2) ring-1 ring-(--color-border-soft)"
+                      title={f.shown ? `${f.name} — 내용까지 보여 줍니다` : `${f.name} — 이름만 전해집니다`}
+                    >
+                      <Paperclip className="h-3 w-3 shrink-0 opacity-60" />
+                      <span className="truncate">{f.name}</span>
+                      <button
+                        type="button"
+                        onClick={() => setAttached((prev) => prev.filter((x) => x.id !== f.id))}
+                        className="grid h-4 w-4 shrink-0 place-items-center rounded-full hover:bg-(--color-surface-hi)"
+                        aria-label={`${f.name} 빼기`}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </span>
+                  ))}
+                  {uploading > 0 && (
+                    <span className="flex items-center gap-1 rounded-full bg-(--color-bg-2) px-2.5 py-1 text-[11px] text-(--color-fg-4)">
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      올리는 중 {uploading}
+                    </span>
+                  )}
+                </div>
+              )}
+              <div className="flex gap-2">
+              <input
+                ref={fileRef}
+                type="file"
+                multiple
+                hidden
+                onChange={(e) => {
+                  void attach(e.target.files);
+                  // 같은 파일을 다시 고를 수 있게 비운다.
+                  e.target.value = "";
+                }}
+              />
+              <button
+                type="button"
+                onClick={() => fileRef.current?.click()}
+                disabled={busy || attached.length >= 5}
+                className="grid w-10 shrink-0 place-items-center self-stretch rounded-lg bg-(--color-bg-2) text-(--color-fg-3) ring-1 ring-(--color-border-soft) transition hover:text-(--color-fg) disabled:opacity-40"
+                aria-label="파일 붙이기"
+                title="파일 붙이기 (Inbox 메모함에 들어갑니다)"
+              >
+                <Paperclip className="h-4 w-4" />
+              </button>
               <textarea
                 ref={inputRef}
                 value={draft}
@@ -348,12 +471,13 @@ export function AgentChat({ renderMemoRef }: Props = {}) {
               />
               <button
                 type="submit"
-                disabled={busy || !draft.trim()}
+                disabled={busy || (!draft.trim() && attached.length === 0)}
                 className="grid w-12 shrink-0 place-items-center rounded-lg bg-(--color-accent) text-(--color-bg) transition hover:bg-(--color-accent-strong) disabled:opacity-40"
                 aria-label="보내기"
               >
                 <Send className="h-4 w-4" />
               </button>
+              </div>
             </form>
           </section>
         </div>

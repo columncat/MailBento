@@ -14,9 +14,9 @@ import { readJson } from "@/lib/read-json";
  * 아예 모르므로 **에이전트에게 물어본다** — 이미 그 다리를 거쳐 대화하고 있으니
  * 새 자격 증명을 이 앱에 들이지 않아도 된다.
  *
- * 여기서는 누를 수 없다. 체크를 바꾸려면 메모 쪽으로 가야 한다 — 그래서 빈
- * 상자를 그리지 않는다. 누르지도 못하는 상자는 "여기서 할 수 있다" 는 거짓말이다.
- * 끝난 것만 표시한다.
+ * 체크도 여기서 누른다. 두 채팅창이 다를 이유가 없어서다 — 메모 쪽에서 되는
+ * 것이 메일 쪽에서 안 되면, 같은 대화인데 창구에 따라 할 수 있는 일이 달라진다.
+ * 누르면 그것도 다리를 지나 메모에 반영된다.
  */
 
 export interface MemoCard {
@@ -38,6 +38,21 @@ export interface MemoCard {
 const cache = new Map<string, MemoCard | null>();
 const inflight = new Map<string, Promise<MemoCard | null>>();
 
+/** 체크를 켜고 끈다. 다리가 여는 것은 읽기와 이것 둘뿐이다. */
+async function toggleMemo(id: string, done: boolean): Promise<boolean> {
+  try {
+    const res = await fetch(apiPath("/api/agent/memos"), {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ id, done }),
+    });
+    await readJson(res);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function fetchMemo(id: string): Promise<MemoCard | null> {
   if (cache.has(id)) return cache.get(id) ?? null;
   const running = inflight.get(id);
@@ -45,10 +60,9 @@ async function fetchMemo(id: string): Promise<MemoCard | null> {
 
   const p = (async () => {
     try {
-      const res = await fetch(
-        apiPath(`/api/agent/chat?memos=${encodeURIComponent(id)}`),
-        { cache: "no-store" },
-      );
+      const res = await fetch(apiPath(`/api/agent/memos?ids=${encodeURIComponent(id)}`), {
+        cache: "no-store",
+      });
       const json = await readJson<{ memos?: MemoCard[] }>(res);
       const found = json.memos?.find((m) => m.id === id) ?? null;
       cache.set(id, found);
@@ -112,13 +126,37 @@ export function MemoRef({ memoId, block }: { memoId: string; block: boolean }) {
   if (memo === undefined) return chip("메모 불러오는 중…");
   if (memo === null) return chip("지워졌거나 없는 메모");
 
-  const done = memo.checkable && memo.done;
+  const checkable = memo.checkable;
+  const done = checkable && memo.done;
+
+  /*
+   * 눌리는 순간 화면부터 바꾼다.
+   *
+   * 다리를 지나 메모까지 갔다 오는 데 한 박자가 걸린다. 그동안 상자가 그대로면
+   * 눌리지 않은 것처럼 보여 한 번 더 누르게 된다. 실패하면 되돌리고 캐시도
+   * 비워, 다음에 그릴 때 서버 값을 다시 받게 한다.
+   */
+  const toggle = async () => {
+    const next = !memo.done;
+    setMemo({ ...memo, done: next });
+    cache.set(memo.id, { ...memo, done: next });
+    const ok = await toggleMemo(memo.id, next);
+    if (!ok) {
+      setMemo({ ...memo, done: memo.done });
+      cache.delete(memo.id);
+    }
+  };
 
   if (!block) {
     return (
       <span className="inline-flex max-w-full items-baseline gap-1 rounded bg-(--color-bg) px-1.5 py-0.5 text-[12px] text-(--color-fg-2) ring-1 ring-(--color-border-soft)">
-        {done && (
-          <Check className="h-3 w-3 shrink-0 self-center text-(--color-accent)" strokeWidth={3} />
+        {checkable && (
+          <Check
+            className={`h-3 w-3 shrink-0 self-center ${
+              done ? "text-(--color-accent)" : "opacity-25"
+            }`}
+            strokeWidth={3}
+          />
         )}
         <span className={`truncate ${done ? "line-through opacity-60" : ""}`}>
           {memo.label}
@@ -129,10 +167,21 @@ export function MemoRef({ memoId, block }: { memoId: string; block: boolean }) {
 
   return (
     <div className="flex items-start gap-2.5 rounded-lg bg-(--color-bg) px-3 py-2 ring-1 ring-(--color-border-soft)">
-      {done ? (
-        <span className="mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded border border-(--color-accent) bg-(--color-accent) text-(--color-bg)">
-          <Check className="h-3 w-3" strokeWidth={3} />
-        </span>
+      {checkable ? (
+        <button
+          type="button"
+          role="checkbox"
+          aria-checked={done}
+          onClick={() => void toggle()}
+          className={`mt-0.5 grid h-4 w-4 shrink-0 place-items-center rounded border transition ${
+            done
+              ? "border-(--color-accent) bg-(--color-accent) text-(--color-bg)"
+              : "border-(--color-border) hover:border-(--color-accent)"
+          }`}
+          aria-label={done ? "완료 취소" : "완료"}
+        >
+          {done && <Check className="h-3 w-3" strokeWidth={3} />}
+        </button>
       ) : (
         <StickyNote className="mt-0.5 h-4 w-4 shrink-0 text-(--color-fg-4)" />
       )}
