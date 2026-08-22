@@ -40,6 +40,7 @@ import {
 } from "@/lib/widget-storage";
 
 import { AgentChat } from "./agent-chat";
+import { MemoRef } from "./memo-ref";
 import { MemoBentoLink } from "./cross-app-link";
 import { InboxCard } from "./inbox-card";
 import { SortableInboxCard } from "./sortable-inbox-card";
@@ -397,7 +398,13 @@ export function Dashboard({
         </div>
 
         <div className="flex items-center gap-2">
-          <AgentChat />
+          {/*
+            답변 속 메모를 카드로 그린다. 이 앱은 메모를 모르므로 조각이 스스로
+            에이전트에게 물어본다 — 여기서 체크를 바꾸지는 못한다.
+          */}
+          <AgentChat
+            renderMemoRef={(memoId, block) => <MemoRef memoId={memoId} block={block} />}
+          />
           <MemoBentoLink href={memobentoUrl} />
           <button
             type="button"

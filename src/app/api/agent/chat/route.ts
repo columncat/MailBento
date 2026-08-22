@@ -97,6 +97,30 @@ export async function GET(req: Request) {
     }
   }
 
+  /*
+   * 답변 속 `[[memo:…]]` 를 그릴 재료.
+   *
+   * 이 앱은 MemoBento 를 모른다 — 자격 증명도 없고, 줄 이유도 없다. 대신 이미
+   * 이 다리를 거쳐 대화하고 있으니 재료도 같은 길로 받아 온다.
+   */
+  const memoIds = new URL(req.url).searchParams.get("memos");
+  if (memoIds) {
+    const ctl = new AbortController();
+    const timer = setTimeout(() => ctl.abort(), 8000);
+    try {
+      const res = await fetch(
+        new URL(`/memos?ids=${encodeURIComponent(memoIds)}`, AGENT_URL),
+        { headers: { authorization: `Bearer ${AGENT_TOKEN}` }, signal: ctl.signal },
+      );
+      const text = await res.text();
+      return NextResponse.json(text ? JSON.parse(text) : { memos: [] });
+    } catch {
+      return NextResponse.json({ memos: [] });
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
   // 진행 중인 작업 물어보기. 화면이 몇 초마다 부른다.
   const job = new URL(req.url).searchParams.get("job");
   if (job) {
