@@ -2,6 +2,8 @@
 
 import { CornerDownLeft } from "lucide-react";
 
+import { assetPath } from "@/lib/api-path";
+
 function GoogleLogo({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" className={className} aria-hidden>
@@ -37,7 +39,7 @@ function NaverLogo({ className }: { className?: string }) {
 function NamuLogo({ className }: { className?: string }) {
   return (
     // eslint-disable-next-line @next/next/no-img-element
-    <img src="/namu.svg" alt="" aria-hidden className={className} />
+    <img src={assetPath("/namu.svg")} alt="" aria-hidden className={className} />
   );
 }
 
