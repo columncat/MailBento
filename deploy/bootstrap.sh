@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 세 저장소를 받아 스택을 띄운다. 이미 있으면 최신으로 당긴다.
+# 저장소들을 받아 스택을 띄운다. 이미 있으면 최신으로 당긴다.
 #
 # 처음 한 번:
 #   ./bootstrap.sh
@@ -18,7 +18,7 @@ export BOOTSTRAP_HASH
 
 OWNER="${BENTO_GITHUB_OWNER:-columncat}"
 REF="${BENTO_REF:-main}"
-REPOS="MailBento MemoBento BentoAgent"
+REPOS="MailBento MemoBento PaperBento BentoAgent"
 
 # compose 는 v2 플러그인일 수도, v1 독립 실행 파일일 수도 있다.
 if docker compose version >/dev/null 2>&1; then
@@ -85,13 +85,15 @@ export BENTO_MCP_CACHEBUST
 echo "── 빌드"
 $COMPOSE build
 
-# 두 앱은 컨테이너 안에서 nodejs(uid 1001)로 돈다. 그런데 여기서 만든 폴더는
+# 앱들은 컨테이너 안에서 nodejs(uid 1001)로 돈다. 그런데 여기서 만든 폴더는
 # 이 계정(대개 uid 1000) 소유라, 그대로 두면 앱이 설정을 읽지도 데이터를
 # 쓰지도 못한다. 호스트에 sudo 가 없어도 되도록 컨테이너 안에서 바로잡는다.
 echo "── 권한 맞추기"
 $COMPOSE run --rm --no-deps --user 0 --entrypoint sh mailbento \
   -c 'chown -R 1001:1001 /config /app/data' >/dev/null
 $COMPOSE run --rm --no-deps --user 0 --entrypoint sh memobento \
+  -c 'chown -R 1001:1001 /app/data' >/dev/null
+$COMPOSE run --rm --no-deps --user 0 --entrypoint sh paperbento \
   -c 'chown -R 1001:1001 /app/data' >/dev/null
 
 echo "── 시작"

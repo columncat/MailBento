@@ -2,8 +2,8 @@
 /**
  * 설치 마법사.
  *
- * 아무것도 설정되지 않은 새 기계에서 처음 뜨는 화면이다. 세 컨테이너(메일함·
- * 메모함·에이전트)가 필요한 값을 여기서 한 번에 받아 `/config` 에 적는다.
+ * 아무것도 설정되지 않은 새 기계에서 처음 뜨는 화면이다. 네 컨테이너(메일함·
+ * 메모함·논문함·에이전트)가 필요한 값을 여기서 한 번에 받아 `/config` 에 적는다.
  *
  * 왜 앱이 아니라 따로 도는 작은 서버인가 — 메일함 앱은 암호화 키가 없으면
  * 아예 뜨지 못한다. 설정이 없을 때 앱을 억지로 띄우려면 그 검사부터 헐겁게
@@ -12,7 +12,7 @@
  * 있으면 앱.
  *
  * 다 적고 나면 이 프로세스는 스스로 끝난다. 도커가 다시 띄우고, 그때는
- * 설정이 있으므로 앱이 뜬다. 나머지 두 컨테이너는 설정 파일이 생기기를
+ * 설정이 있으므로 앱이 뜬다. 나머지 컨테이너들은 자기 설정 파일이 생기기를
  * 기다리다가 그대로 이어서 시작한다.
  *
  * 의존성이 없다. 이 서버가 도는 시점에는 앱의 node_modules 를 믿을 이유가
@@ -115,14 +115,14 @@ const HTML = String.raw`<!doctype html>
 <body>
 <main>
   <h1>Bento 설치</h1>
-  <p class="lede">메일함·메모함·에이전트가 쓸 값을 한 번에 받습니다. 암호화 키처럼 직접 정할 이유가 없는 것은 여기서 만들어 넣습니다.</p>
+  <p class="lede">메일함·메모함·논문함·에이전트가 쓸 값을 한 번에 받습니다. 암호화 키처럼 직접 정할 이유가 없는 것은 여기서 만들어 넣습니다.</p>
 
   <div class="err" id="err"></div>
 
   <form id="f">
     <section>
       <h2>접속 비밀번호</h2>
-      <p class="hint">메일함과 메모함에 같이 씁니다. 비우면 <b>누구나 열 수 있는 상태</b>가 됩니다 — 집 안에서만 쓰고 밖으로 열지 않을 때만 비우세요.</p>
+      <p class="hint">메일함·메모함·논문함에 같이 씁니다. 비우면 <b>누구나 열 수 있는 상태</b>가 됩니다 — 집 안에서만 쓰고 밖으로 열지 않을 때만 비우세요.</p>
       <label>비밀번호</label>
       <input type="password" name="password" autocomplete="new-password" placeholder="비워 두면 잠그지 않습니다">
       <label>한 번 더</label>
@@ -142,7 +142,7 @@ const HTML = String.raw`<!doctype html>
 
     <section>
       <h2>Discord</h2>
-      <p class="hint">에이전트에게 말을 걸고 새 메일 알림을 받는 통로입니다. 안 켜도 두 앱의 채팅창은 그대로 쓸 수 있습니다.</p>
+      <p class="hint">에이전트에게 말을 걸고 새 메일 알림을 받는 통로입니다. 안 켜도 앱의 채팅창은 그대로 쓸 수 있습니다.</p>
       <div class="check">
         <input type="checkbox" name="discordEnabled" id="de" checked>
         <span><b>Discord 봇을 켭니다</b><br>
@@ -160,7 +160,7 @@ const HTML = String.raw`<!doctype html>
 
     <section>
       <h2>주소</h2>
-      <p class="hint">두 앱을 오가는 버튼과 브라우저가 쓰는 주소입니다. 비우면 지금 접속한 호스트에서 알아서 유추하므로, 대개 비워 두면 됩니다.</p>
+      <p class="hint">앱끼리 오가는 버튼과 브라우저가 쓰는 주소입니다. 비우면 지금 접속한 호스트에서 알아서 유추하므로, 대개 비워 두면 됩니다.</p>
       <div class="row">
         <div>
           <label>메일함 주소</label>
@@ -169,6 +169,10 @@ const HTML = String.raw`<!doctype html>
         <div>
           <label>메모함 주소</label>
           <input type="text" name="memobentoUrl" placeholder="예: https://memo.example.com">
+        </div>
+        <div>
+          <label>논문함 주소</label>
+          <input type="text" name="paperbentoUrl" placeholder="예: https://paper.example.com">
         </div>
       </div>
       <label>업로드 한 개 최대 크기 (MB)</label>
@@ -180,7 +184,7 @@ const HTML = String.raw`<!doctype html>
 
   <div class="done" id="done">
     <h2>설정을 저장했습니다</h2>
-    <p class="lede">세 서비스가 차례로 올라옵니다. 10초쯤 뒤 이 페이지가 알아서 메일함으로 넘어갑니다.</p>
+    <p class="lede">네 서비스가 차례로 올라옵니다. 10초쯤 뒤 이 페이지가 알아서 메일함으로 넘어갑니다.</p>
   </div>
 </main>
 
@@ -272,6 +276,13 @@ function save(input) {
   // 컨테이너끼리는 서비스 이름으로 부른다. 호스트 포트가 바뀌어도 안 흔들린다.
   const AGENT_URL = "http://bentoagent:4000";
 
+  // 헤더에서 서로 건너가는 버튼의 주소. 비우면 각 앱이 접속한 호스트에서
+  // 유추하므로 대개 비어 있다.
+  const mailbentoUrl = pick(input.mailbentoUrl);
+  const memobentoUrl = pick(input.memobentoUrl);
+  const paperbentoUrl = pick(input.paperbentoUrl);
+  const maxUploadMb = pick(input.maxUploadMb) || "5120";
+
   const shared = {
     AUTH_PASSWORD: password,
     AUTH_SECRET: password ? authSecret : "",
@@ -284,7 +295,8 @@ function save(input) {
     envFile({
       ...shared,
       ENCRYPTION_KEY: encryptionKey,
-      MEMOBENTO_URL: pick(input.memobentoUrl),
+      MEMOBENTO_URL: memobentoUrl,
+      PAPERBENTO_URL: paperbentoUrl,
     }),
     { mode: 0o600 },
   );
@@ -293,11 +305,27 @@ function save(input) {
     join(CONFIG_DIR, "memobento.env"),
     envFile({
       ...shared,
-      MAILBENTO_URL: pick(input.mailbentoUrl),
-      MAX_UPLOAD_MB: pick(input.maxUploadMb) || "5120",
+      MAILBENTO_URL: mailbentoUrl,
+      PAPERBENTO_URL: paperbentoUrl,
+      MAX_UPLOAD_MB: maxUploadMb,
       // Corkboard 와 Memo 메모함은 메일함과 같은 자료를 쓴다. 이 경로가 없으면
       // 두 앱이 각자의 사본을 보게 되어 한쪽에서 고친 것이 다른 쪽에 안 보인다.
       MAILBENTO_DB_PATH: "/app/mailbento/mailbento.db",
+    }),
+    { mode: 0o600 },
+  );
+
+  /*
+   * 논문함. 메모함과 달리 남의 DB 를 보지 않아서 경로 설정이 없다 —
+   * 논문·요약·메모가 전부 자기 것이라 나눠 쓸 자료가 없다.
+   */
+  writeFileSync(
+    join(CONFIG_DIR, "paperbento.env"),
+    envFile({
+      ...shared,
+      MAILBENTO_URL: mailbentoUrl,
+      MEMOBENTO_URL: memobentoUrl,
+      MAX_UPLOAD_MB: maxUploadMb,
     }),
     { mode: 0o600 },
   );

@@ -1,11 +1,11 @@
 # ============================================================
-# Bento — 메일함 · 메모함 · 에이전트 한 벌
+# Bento — 메일함 · 메모함 · 논문함 · 에이전트 한 벌
 # ============================================================
 #
-#   ./bootstrap.sh          저장소를 받아 세 컨테이너를 띄운다
+#   ./bootstrap.sh          저장소를 받아 네 컨테이너를 띄운다
 #
 # 그리고 브라우저로 http://<주소>:3000 을 열면 설치 마법사가 뜬다. 거기서
-# 값을 채우면 세 서비스가 이어서 올라온다.
+# 값을 채우면 네 서비스가 이어서 올라온다.
 #
 # 빌드 자리를 ./src 로 두는 이유는 BentoAgent 가 비공개 저장소이기 때문이다.
 # 도커에게 git 주소를 그대로 주면 도커가 스스로 받아야 하는데, 그러려면
@@ -59,9 +59,32 @@ services:
     networks: [bento]
     depends_on: [mailbento]
 
-  # 4000 번. 두 앱의 채팅창이 서버끼리 부르는 입구다.
+  # 3002 번(안에서는 3000). 논문 PDF 와 그 위의 메모가 사는 곳.
   #
-  # 밖으로는 127.0.0.1 에만 연다. 두 앱은 같은 네트워크 안에서 서비스 이름으로
+  # 메모함과 달리 메일함 DB 를 보지 않는다. 나눠 쓰는 자료가 없다 — 논문도
+  # 요약도 메모도 전부 이 앱이 소유하는 행이라 자기 볼륨 하나면 된다.
+  paperbento:
+    container_name: PaperBento
+    build:
+      context: ./src/PaperBento
+      args:
+        BASE_PATH: "${PAPERBENTO_BASE_PATH:-}"
+    restart: unless-stopped
+    environment:
+      # 이 스택이 설정을 관리한다는 표시. 없으면 진입 스크립트가
+      # 예전 방식(환경변수 직접 주입)으로 보고 앱을 바로 띄운다.
+      BENTO_MANAGED: "1"
+    ports:
+      - "${PAPERBENTO_PORT:-3002}:3000"
+    volumes:
+      - ./config:/config
+      - ./data/paperbento:/app/data
+    networks: [bento]
+    depends_on: [mailbento]
+
+  # 4000 번. 앱들의 채팅창이 서버끼리 부르는 입구다.
+  #
+  # 밖으로는 127.0.0.1 에만 연다. 앱들은 같은 네트워크 안에서 서비스 이름으로
   # 부르므로 이 포트가 없어도 채팅창은 그대로 돈다 — 열어 두는 것은 같은
   # 기계에서 손으로 확인할 때를 위해서다.
   bentoagent:
@@ -69,7 +92,8 @@ services:
     build:
       context: ./src/BentoAgent
       args:
-        # 두 앱의 mcp/ 를 언제 다시 받을지. bootstrap.sh 가 최근 커밋을 넣는다.
+        # 앱들의 mcp/ 를 언제 다시 받을지. bootstrap.sh 가 최근 커밋을 넣는다.
+        # PaperBento 는 1단계에 mcp/ 가 없어 아직 여기 끼지 않는다.
         MCP_CACHEBUST: "${BENTO_MCP_CACHEBUST:-}"
         MEMOBENTO_REF: main
         MAILBENTO_REF: main

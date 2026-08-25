@@ -1,6 +1,6 @@
 # Cloudflare 터널에 얹기
 
-한 도메인을 경로로 나눠 쓰는 배포(`bento.example.com/mail` · `/memo`)를
+한 도메인을 경로로 나눠 쓰는 배포(`bento.example.com/mail` · `/memo` · `/paper`)를
 터널 뒤에 두는 방법.
 
 ## 앱 쪽
@@ -11,22 +11,31 @@
 ```sh
 MAILBENTO_BASE_PATH=/mail
 MEMOBENTO_BASE_PATH=/memo
+PAPERBENTO_BASE_PATH=/paper
 ```
 
 ```sh
 ./bootstrap.sh
 ```
 
-그리고 두 앱을 오가는 버튼 주소를 설정에 적는다. 비워 두면 접속한 호스트의
-3000·3001 포트로 유추하는데, 한 도메인을 나눠 쓰면 그 유추가 맞지 않는다.
+그리고 앱끼리 오가는 버튼 주소를 설정에 적는다. 비워 두면 접속한 호스트의
+3000·3001·3002 포트로 유추하는데, 한 도메인을 나눠 쓰면 그 유추가 맞지 않는다.
 
 ```
 # config/mailbento.env
 MEMOBENTO_URL='https://bento.example.com/memo'
+PAPERBENTO_URL='https://bento.example.com/paper'
 
 # config/memobento.env
 MAILBENTO_URL='https://bento.example.com/mail'
+PAPERBENTO_URL='https://bento.example.com/paper'
+
+# config/paperbento.env
+MAILBENTO_URL='https://bento.example.com/mail'
+MEMOBENTO_URL='https://bento.example.com/memo'
 ```
+
+설치 마법사의 **주소** 칸에 적으면 이 세 파일에 알아서 들어간다.
 
 ## 터널 쪽
 
@@ -38,9 +47,25 @@ MAILBENTO_URL='https://bento.example.com/mail'
 
 | 호스트 | 경로 | 서비스 |
 | --- | --- | --- |
-| `bento.example.com` | `/mail*` | `http://localhost:3000` |
-| `bento.example.com` | `/memo*` | `http://localhost:3001` |
+| `bento.example.com` | `^/mail(/\|$)` | `http://localhost:3000` |
+| `bento.example.com` | `^/memo(/\|$)` | `http://localhost:3001` |
+| `bento.example.com` | `^/paper(/\|$)` | `http://localhost:3002` |
 | (그 외) | | `http_status:404` |
+
+### 경로는 글롭이 아니라 정규식이다. 앵커를 빼지 마라
+
+`path` 는 **Go 정규식**이고 문자열 어디에나 걸린다. 글롭처럼 보고 `/mail*`
+이라고 적으면 그건 "`/mai` 다음에 `l` 이 0개 이상" 이라는 뜻이 되고, `l` 이
+0개여도 되니 결국 **`/mai` 를 품은 모든 경로**가 걸린다.
+
+실제로 그래서 사고가 났다. `/mail*` 규칙이 메모함의
+`/memo/_next/static/chunks/main-app.js` 를 가로챘다 — `/main-app.js` 안에
+`/mai` 가 있었기 때문이다. 화면은 뜨는데 자바스크립트가 통째로 메일함에서
+와서 아무것도 안 눌리는 상태가 됐고, 브라우저 콘솔에는 문법 오류만 찍혀서
+원인을 찾는 데 한참 걸렸다.
+
+`^` 로 앞을 묶고 `(/|$)` 로 뒤를 막는다. 그래야 `/paper` 와 `/paper/…` 만
+걸리고 `/papers-old` 나 `/x/paper` 는 안 걸린다.
 
 **cloudflared 는 경로를 잘라 내지 않는다.** `/mail/settings` 로 들어온 요청은
 `/mail/settings` 그대로 앱에 닿는다. 그래서 앱 쪽에 `BASE_PATH` 가 필요하다 —
@@ -72,10 +97,12 @@ curl -X PUT "$API/accounts/$ACCOUNT/cfd_tunnel/$TUNNEL/configurations" \
   -d '{
     "config": {
       "ingress": [
-        { "hostname": "bento.example.com", "path": "/mail*",
+        { "hostname": "bento.example.com", "path": "^/mail(/|$)",
           "service": "http://localhost:3000" },
-        { "hostname": "bento.example.com", "path": "/memo*",
+        { "hostname": "bento.example.com", "path": "^/memo(/|$)",
           "service": "http://localhost:3001" },
+        { "hostname": "bento.example.com", "path": "^/paper(/|$)",
+          "service": "http://localhost:3002" },
         { "service": "http_status:404" }
       ]
     }
@@ -94,9 +121,14 @@ curl -X PUT "$API/accounts/$ACCOUNT/cfd_tunnel/$TUNNEL/configurations" \
 ## 확인
 
 ```sh
-curl -sI https://bento.example.com/mail   # 307 → /mail/login
+curl -sI https://bento.example.com/mail    # 307 → /mail/login
+curl -sI https://bento.example.com/paper   # 307 → /paper/login
 curl -s  https://bento.example.com/mail/api/agent/chat   # 401 JSON (로그인 전)
 ```
 
 `/mail` 이 404 면 ingress 의 경로 규칙이 안 걸린 것이고, 화면은 뜨는데 모양이
 깨졌다면 `BASE_PATH` 없이 빌드된 이미지가 도는 것이다.
+
+앱은 뜨는데 **아무것도 안 눌린다**면 정적 자산이 남의 앱에서 오고 있는 것이다.
+개발자 도구의 네트워크 탭에서 `_next/static/…` 이 어디로 갔는지 본다 — 위의
+앵커 이야기가 그 사고다.
