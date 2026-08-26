@@ -31,6 +31,7 @@ export default async function HomePage() {
       regions={appConfig.regions}
       authEnabled={isAuthEnabled()}
       memobentoUrl={env.MEMOBENTO_URL?.trim() || null}
+      paperbentoUrl={env.PAPERBENTO_URL?.trim() || null}
     />
   );
 }

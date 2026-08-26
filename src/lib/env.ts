@@ -26,6 +26,15 @@ const envSchema = z.object({
    * 비우면 지금 접속한 호스트의 3001 포트로 유추한다.
    */
   MEMOBENTO_URL: z.string().optional(),
+
+  /**
+   * 논문함으로 건너가는 버튼의 주소 (선택).
+   *
+   * 비우면 접속한 호스트의 3002 포트로 유추한다. 한 도메인을 경로로 나눠 쓰는
+   * 배포(`bento.example.com/paper`)는 유추로 못 맞히므로 전체 주소를 적어야 한다 —
+   * 호스트만 보고는 경로를 알 수 없다.
+   */
+  PAPERBENTO_URL: z.string().optional(),
 });
 
 export const env = envSchema.parse(process.env);
