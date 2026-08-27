@@ -58,13 +58,29 @@ done
 #
 # 이 파일에는 이 기계에만 해당하는 값이 없다. 포트 같은 것은 옆의 .env 에서
 # 읽으므로 덮어써도 잃을 것이 없다.
+#
+# **도는 중인 자기 자신을 제자리에 덮어쓰면 안 된다.**
+#
+# bash 는 스크립트를 통째로 읽어 두지 않는다. 열어 둔 파일의 바이트 위치를
+# 기억했다가 필요할 때 이어 읽는데, 그 사이 파일 내용이 길이까지 바뀌면
+# **새 내용의 옛 위치**부터 읽는다. 그 자리가 문장 한가운데면 글이 깨진다.
+#
+#   ./bootstrap.sh: line 70: syntax error near unexpected token `fi'
+#
+# 논문함을 처음 얹던 날 실제로 이렇게 멎었다. 다시 실행하면 넘어가서 한 번
+# 겪고 잊기 쉬운데, **bootstrap.sh 의 길이가 바뀌는 날마다 첫 실행이 깨진다.**
+#
+# `mv` 는 inode 를 건드리지 않고 디렉터리의 이름만 갈아 끼운다. 도는 쪽은
+# 열어 둔 옛 inode 를 그대로 붙들고 끝까지 온전히 읽는다. 새 것은 그다음
+# 실행부터 — 바로 아래 respawn 이 그 일을 한다.
 for f in docker-compose.yml bootstrap.sh; do
   src="src/MailBento/deploy/$f"
   [ -f "$src" ] || continue
   if ! cmp -s "$src" "$f"; then
     echo "── $f 갱신"
-    cp "$src" "$f"
-    [ "$f" = "bootstrap.sh" ] && chmod +x "$f"
+    cp "$src" "$f.new"
+    [ "$f" = "bootstrap.sh" ] && chmod +x "$f.new"
+    mv -f "$f.new" "$f"
   fi
 done
 
