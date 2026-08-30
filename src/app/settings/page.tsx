@@ -4,10 +4,12 @@ import Link from "next/link";
 import { ProviderIcon } from "@/components/provider-icon";
 import { getAppConfig } from "@/lib/app-config";
 import { isAuthEnabled } from "@/lib/auth";
-import { db, schema } from "@/lib/db";
+import { databaseFileBytes, db, schema } from "@/lib/db";
+import { detailCacheStats } from "@/lib/message-detail-cache";
 
 import { AccountActions } from "./account-actions";
 import { AgentPanel } from "./agent-panel";
+import { BodyCachePanel } from "./body-cache-panel";
 import { PreferencesPanel } from "./preferences-panel";
 import { RegionsSetting } from "./regions-setting";
 import { SettingsIO } from "./settings-io";
@@ -23,6 +25,7 @@ export default async function SettingsPage({
   const { auth_error } = await searchParams;
   const authEnabled = isAuthEnabled();
   const appConfig = getAppConfig();
+  const bodyCache = detailCacheStats();
 
   const accounts = await db
     .select()
@@ -153,6 +156,11 @@ export default async function SettingsPage({
 
       {/* 표시 설정 */}
       <PreferencesPanel />
+
+      {/* 열어 본 메일 본문 캐시 — 몇 통이 담겼는지 보여 주고 비운다 */}
+      <BodyCachePanel
+        initial={{ ...bodyCache, fileBytes: databaseFileBytes() }}
+      />
 
       {/* 설정 백업 (계정 + 위젯 + 표시설정 전체) */}
       <SettingsIO />

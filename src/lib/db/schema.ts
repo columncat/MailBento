@@ -182,6 +182,83 @@ export const seenMessages = sqliteTable(
   }),
 );
 
+/**
+ * 열어 본 메일 본문의 디스크 캐시.
+ *
+ * 메일을 열 때마다 IMAP 연결을 새로 열고 RFC822 원문을 통째로 받아 재파싱하는
+ * 비용을 없애려고 둔다. 메모리 Map 이었을 때는 컨테이너가 재시작할 때마다
+ * 비어서 사실상 한 세션 안에서만 살았다.
+ *
+ * **자동으로 미리 받아 두지 않는다** — 사람이 실제로 연 메일만 여기 남는다.
+ * (봉투만 받는 mail-poller 의 결정은 그대로다.)
+ *
+ * archived_messages 는 같은 MailMessageDetail 을 컬럼으로 쪼개 두었지만 이쪽은
+ * JSON 한 덩이다. 저쪽은 원본이 서버에서 사라져도 사람이 꺼내 읽는 **사본**이라
+ * 컬럼으로 질의할 값이지만, 이건 잃어버리면 다시 받아 오면 그만인 캐시라
+ * 질의할 일이 없다. 무엇보다 MailMessageDetail 에 필드가 하나 늘었을 때
+ * 컬럼으로 쪼개 두면 그 필드만 조용히 빠진 본문이 나가서 "받아온 것"과
+ * 구분되지 않는다. 덩어리로 담고 format 이 다르면 아예 못 읽는 것으로 친다.
+ */
+export const messageBodyCache = sqliteTable(
+  "message_body_cache",
+  {
+    /**
+     * 계정이 지워지면 본문 사본도 디스크에서 함께 사라져야 하므로 cascade.
+     * (archived_messages 와 달리 set null 이 아니다 — 저쪽은 살려 둘 사본이고
+     * 이건 원본이 없으면 의미가 없는 캐시다.)
+     */
+    accountId: integer("account_id")
+      .notNull()
+      .references(() => accounts.id, { onDelete: "cascade" }),
+    /** IMAP UID 문자열. UID 는 메일함마다 따로 매겨져 계정과 짝이어야 뜻이 선다. */
+    messageId: text("message_id").notNull(),
+
+    /**
+     * 이 본문을 담을 때 그 뷰가 보던 **메일함의 지문**.
+     *
+     * 계정 id 와 UID 만으로는 본문의 정체가 서지 않는다. accounts 는 메일함이
+     * 아니라 "뷰"이고, 그 뷰가 보는 메일함(query 의 `folder:`)은 설정 화면에서
+     * **계정 id 를 그대로 둔 채** 갈아치울 수 있다. INBOX 의 UID 1234 를 담아
+     * 둔 뒤 뷰를 보낸메일함으로 바꾸면 보낸메일함의 UID 1234 를 열 때 남의
+     * 본문이 적중한다 — 그 상태로 보관하면 사본으로 굳는다.
+     *
+     * 그래서 담을 때의 메일함을 함께 적고, 꺼낼 때 지금 것과 견준다. 어긋나면
+     * 미스. 메일함을 바꾸는 문이 하나 더 생겨도 이 비교는 그대로 산다 —
+     * 문마다 무효화를 부르는 방식이었다면 그날 결함이 되살아난다.
+     *
+     * 기본값 "" 는 지문을 모르는(0013 이전) 행을 위한 것이다. 실제 지문과는
+     * 결코 같을 수 없으니 그런 행은 영영 적중하지 않는다.
+     */
+    view: text("view").notNull().default(""),
+
+    /**
+     * 담긴 JSON 의 모양 번호. MailMessageDetail 이 바뀌면 올린다 —
+     * 번호가 다른 행은 읽지 않고 버린다(캐시 미스로 친다).
+     */
+    format: integer("format").notNull(),
+    /** MailMessageDetail 통째로 JSON. html 은 담을 때 이미 sanitize 된 값이다. */
+    detail: text("detail").notNull(),
+    /** detail 의 UTF-8 바이트 수 — 통당 상한 판정에 쓴다. */
+    bytes: integer("bytes").notNull(),
+
+    /**
+     * IMAP 에서 받아 담은 시각 (unix **ms**). TTL 기준.
+     * 꺼내 쓸 때 갱신하지 않는다 — 오래된 것은 본문이 낡은 것이지
+     * 안 읽힌 것이 아니다.
+     */
+    storedAt: integer("stored_at").notNull(),
+    /** 마지막으로 담거나 꺼내 쓴 시각 (unix **ms**). LRU 기준. */
+    usedAt: integer("used_at").notNull(),
+  },
+  (t) => ({
+    pk: primaryKey({ columns: [t.accountId, t.messageId] }),
+    /** 버릴 것을 고를 때(LRU) 매번 전체 정렬하지 않도록. */
+    usedIdx: index("message_body_cache_used_idx").on(t.usedAt),
+  }),
+);
+
+export type MessageBodyCacheRow = typeof messageBodyCache.$inferSelect;
+
 export const archivedMessages = sqliteTable(
   "archived_messages",
   {

@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "account not found" }, { status: 404 });
   }
 
-  let detail = peekDetail(accountId, messageId);
+  let detail = peekDetail(account, messageId);
   if (!detail) {
     if (!isProviderImplemented(account.provider)) {
       return NextResponse.json(
@@ -55,7 +55,7 @@ export async function POST(req: NextRequest) {
         account,
         messageId,
       );
-      rememberDetail(accountId, messageId, detail);
+      rememberDetail(account, messageId, detail);
     } catch (e) {
       return NextResponse.json(
         {

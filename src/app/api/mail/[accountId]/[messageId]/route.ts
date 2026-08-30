@@ -4,7 +4,7 @@ import { z } from "zod";
 
 import { db, schema } from "@/lib/db";
 import { MESSAGE_MARKS } from "@/lib/db/schema";
-import { rememberDetail } from "@/lib/message-detail-cache";
+import { peekDetail, rememberDetail } from "@/lib/message-detail-cache";
 import { setFlag } from "@/lib/message-flags";
 import { getProvider, isProviderImplemented } from "@/lib/providers";
 
@@ -35,18 +35,31 @@ export async function GET(
     );
   }
 
+  const uid = decodeURIComponent(messageId);
+  const started = Date.now();
+
   try {
-    const provider = getProvider(account.provider);
-    const message = await provider.fetchMessage(
-      account,
-      decodeURIComponent(messageId),
+    // 한 번 받아 둔 본문이 있으면 IMAP 을 아예 치지 않는다 — 두 번째 열기가
+    // 빠른 이유가 여기다. 없으면 받아 와서 다음을 위해 담아 둔다.
+    let message = peekDetail(account, uid);
+    const hit = message !== null;
+    if (!message) {
+      message = await getProvider(account.provider).fetchMessage(account, uid);
+      rememberDetail(account, uid, message);
+    }
+    // 빨라졌는지 재려면 남아 있어야 한다. 적중률이 낮으면 상한/TTL 을 의심할 것.
+    console.log(
+      `[mail] 본문 ${hit ? "캐시" : "IMAP"} account=${id} uid=${uid} ${
+        Date.now() - started
+      }ms`,
     );
-    // 방금 받은 본문을 잠깐 기억해 둔다 — 이어서 "보관"을 누르면 IMAP 을
-    // 다시 치지 않고 이 값을 그대로 뜬다.
-    rememberDetail(id, decodeURIComponent(messageId), message);
+
     // 열람 = 읽음. 서버의 \Seen 은 건드리지 않고 앱 안에서만 표시한다.
-    const flag = setFlag(id, decodeURIComponent(messageId), { read: true });
+    // 캐시로 답할 때도 똑같이 돈다 — 여는 것이 곧 읽음이다.
+    const flag = setFlag(id, uid, { read: true });
     return NextResponse.json({
+      // 읽음·표식은 본문과 따로 산다. 캐시에 담긴 옛 unread/mark 가 되살아나지
+      // 않도록 message_flags 에서 읽은 값으로 덮어 얹는다.
       message: { ...message, unread: false, mark: flag.mark },
       flag,
     });
