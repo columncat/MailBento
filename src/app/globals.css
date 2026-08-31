@@ -317,6 +317,72 @@
   a { color: inherit; text-decoration: none; }
 }
 
+@layer components {
+  /*
+   * 메일 본문 — 남이 쓴 HTML 이 iframe 없이 우리 문서 안으로 그대로 들어온다.
+   *
+   * 그래서 여기 규칙의 목적은 "예쁘게"가 아니라 "모달 밖으로 못 나가게"다.
+   * 이 칸은 테마와 무관하게 늘 흰 종이 위 검은 글씨라(모달이 그렇게 칠한다)
+   * 색도 테마 토큰이 아니라 검정 알파를 쓴다 — 흰 바탕에 초록 강조색을 얹으면
+   * 남의 편지에 우리 색을 칠하는 꼴이 된다.
+   */
+
+  /* 900px 짜리 배너가 모달 폭을 밀어내지 못하게. height 를 함께 풀어 주지
+     않으면 width/height 속성이 박힌 그림이 납작해진다. */
+  .email-body img {
+    max-width: 100%;
+    height: auto;
+  }
+
+  /* 뉴스레터는 폭을 고정한 표로 짠 것이 흔하다. 표는 줄일 수 없으니 흰 본문
+     안에서만 밀리게 두고, 창 자체는 흔들지 않는다. */
+  .email-body table {
+    max-width: 100%;
+  }
+
+  .email-body pre {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  /* 아직 안 온 그림 — 자리만 잡아 두고 옅게 뛴다. 다 오면 JS 가 이 클래스를
+     뗀다. CSS 만으로 하면 투명한 PNG 뒤에 회색 판이 영영 남는다. */
+  .email-body img.email-img-pending {
+    min-width: 16px;
+    min-height: 16px;
+    background: rgba(0, 0, 0, 0.06);
+    border-radius: 4px;
+    animation: email-img-pulse 1.4s ease-in-out infinite;
+  }
+
+  /* 못 받아 온 그림 자리. 깨진 아이콘 대신 왜 없는지를 글로 말한다. */
+  .email-body .email-img-failed {
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
+    padding: 0.1em 0.5em;
+    border: 1px dashed rgba(0, 0, 0, 0.25);
+    border-radius: 6px;
+    color: rgba(0, 0, 0, 0.55);
+    font-size: 11px;
+    line-height: 1.7;
+    vertical-align: middle;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  @keyframes email-img-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.55; }
+  }
+
+  /* 움직임을 싫어한다고 밝힌 사람에게는 뛰지 않는다. */
+  @media (prefers-reduced-motion: reduce) {
+    .email-body img.email-img-pending { animation: none; }
+  }
+}
+
 @layer utilities {
   .scrollbar-thin {
     scrollbar-width: thin;

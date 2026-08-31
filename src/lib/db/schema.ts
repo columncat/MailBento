@@ -157,9 +157,15 @@ export type MessageFlagRow = typeof messageFlags.$inferSelect;
  * 더 이상 같은 메일을 가리키지 않는다. 그래서 모달이 그리는 값
  * (MailMessageDetail) 을 통째로 떠 온다 — 원본이 서버에서 사라져도 그대로 열린다.
  *
- * 첨부는 보관하지 않는다. MailMessageDetail 에 첨부 필드가 없고 imap 구현도
- * parsed.attachments 를 읽지 않는다. 본문의 cid: 이미지는 지금도 깨진 채로
- * 보이며, 보관하면 그 상태가 그대로 굳는다.
+ * **첨부 바이트는 보관하지 않는다.** 사람이 단추를 눌렀을 때만 IMAP 에서 그
+ * 조각을 받아 흘려보내므로, 원본이 사라진 뒤에는 받을 곳이 없다. 그래서
+ * 보관본의 첨부 목록은 빈 배열이다 — 누를 수 없는 단추를 세우지 않는다.
+ *
+ * 본문의 그림은 다르다. 보관은 화면용 본문을 그대로 뜨지 않고 인라인 그림을
+ * `data:` 로 몸에 구운 판을 새로 받아 온다(api/archive 의 POST 주석 참고).
+ * 화면용 본문은 `/api/mail/{계정}/{UID}/inline/…` 를 가리키는데 그 주소는
+ * 원본이 있어야 뜻이 서기 때문이다. 원격 그림은 서명된 프록시 주소라 계정이
+ * 없어져도 산다.
  */
 /**
  * 이미 본 메일. "새 메일" 판정에만 쓴다.
@@ -236,7 +242,13 @@ export const messageBodyCache = sqliteTable(
      * 번호가 다른 행은 읽지 않고 버린다(캐시 미스로 친다).
      */
     format: integer("format").notNull(),
-    /** MailMessageDetail 통째로 JSON. html 은 담을 때 이미 sanitize 된 값이다. */
+    /**
+     * MailMessageDetail 통째로 JSON. html 은 담을 때 이미 sanitize 된 값이고,
+     * 그 안의 그림 주소는 **우리 라우트를 가리킨다** — 계정 id 와 UID 가 박혀
+     * 있는데 그 둘이 곧 이 행의 키라 어긋날 일이 없다. (format 이 다른 행을
+     * 읽지 않는 이유가 여기에도 있다: 옛 행의 그림은 아직 발신자 서버를
+     * 직접 가리킨다.)
+     */
     detail: text("detail").notNull(),
     /** detail 의 UTF-8 바이트 수 — 통당 상한 판정에 쓴다. */
     bytes: integer("bytes").notNull(),
@@ -295,11 +307,31 @@ export const archivedMessages = sqliteTable(
      */
     receivedAt: integer("received_at").notNull(),
     snippet: text("snippet"),
-    /** 보관 시점에 이미 sanitize 된 HTML. 꺼낼 때 다시 정제하지 않는다. */
+    /**
+     * 보관 시점에 이미 sanitize 된 HTML. 꺼낼 때 다시 정제하지 않는다.
+     *
+     * 여기 담기는 판은 **스스로 서는 판**이다 — 인라인 그림은 `data:` 로 몸에
+     * 구워져 있고, 원격 그림은 원본 주소와 서명만 든 프록시 주소라 계정 행이
+     * 사라져도 뜻이 남는다. 화면용 본문(message_body_cache)을 그대로 옮겨
+     * 담으면 안 되는 이유가 이것이다.
+     */
     html: text("html"),
     text: text("text"),
     /** 1 = 상한을 넘어 본문이 잘렸음. */
     truncated: integer("truncated").notNull().default(0),
+
+    /**
+     * 보관 시점에 **주소를 안 부른** 그림 수.
+     *
+     * NULL 은 0 이 아니라 "이 칸이 생기기 전에 뜬 사본이라 모른다" 는 뜻이다.
+     * 그래서 not null default 0 을 안 준다 — 0 으로 굳히면 화면이 "막은 것이
+     * 없었다" 고 말하게 되는데, 그것은 우리가 아는 사실이 아니다.
+     *
+     * 대신 **프록시로 나가는 그림 수는 컬럼에 안 담는다.** 그 값은 보관된
+     * HTML 을 세면 언제나 나오고, 세는 편이 더 맞다 — 상한(capHtml)에 걸려
+     * 그림이 빠졌으면 보관 시점의 숫자는 이미 틀린 값이기 때문이다.
+     */
+    blockedTrackers: integer("blocked_trackers"),
 
     /** 보관 시점의 표식 스냅샷 — message_flags 는 계정과 함께 사라진다. */
     read: integer("read").notNull().default(0),

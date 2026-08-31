@@ -2,13 +2,19 @@
 
 import * as Dialog from "@radix-ui/react-dialog";
 import { AlertCircle, Archive, ArchiveX, Loader2, MailOpen, X } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { MessageMark } from "@/lib/db/schema";
 import { cn } from "@/lib/utils";
 import { apiFetch } from "@/lib/api-path";
+import { attachmentPath } from "@/lib/mail-part-url";
 import type { MailMessageDetail } from "@/lib/providers/types";
 
+import {
+  AttachmentBar,
+  BlockedTrackerNote,
+  readMailExtras,
+} from "./message-attachments";
 import { MarkPicker } from "./message-mark";
 import { ProviderIcon } from "./provider-icon";
 
@@ -35,6 +41,23 @@ interface Props {
 interface Flag {
   read: boolean;
   mark: MessageMark | null;
+}
+
+/**
+ * 못 받아 온 그림 자리에 이유를 적어 둔다.
+ *
+ * 브라우저가 그리는 깨진 아이콘은 아무 말도 하지 않아서, 사람은 "이 앱이
+ * 그림을 못 그리네" 로 읽는다. 이제 그림은 발신자 서버가 아니라 우리 라우트가
+ * 받아 오므로, 못 받은 것은 우리가 설명해야 한다.
+ */
+function markImageFailed(img: HTMLImageElement) {
+  img.classList.remove("email-img-pending");
+  const note = document.createElement("span");
+  note.className = "email-img-failed";
+  const alt = img.getAttribute("alt")?.trim();
+  note.textContent = alt ? `이미지 없음 — ${alt}` : "이미지 없음";
+  note.title = "이 이미지를 받아 오지 못했습니다";
+  img.replaceWith(note);
 }
 
 export function MessageModal({
@@ -112,6 +135,61 @@ export function MessageModal({
     return () => ac.abort();
     // onFlagsChanged 는 상위에서 useCallback 으로 고정 — 넣어도 재실행되지 않음
   }, [accountId, messageId, archiveId, onFlagsChanged]);
+
+  const bodyRef = useRef<HTMLDivElement | null>(null);
+
+  /*
+   * 본문 그림이 어디까지 왔는지 사람이 알 수 있게 한다.
+   *
+   * 그림은 이제 발신자 서버가 아니라 우리 라우트에서 온다. 받아 오는 동안은
+   * 빈 칸이라 글이 아래위로 튀고, 못 받아 오면 깨진 아이콘만 남는다. 그래서
+   * 오는 동안은 자리를 잡아 두고, 못 오면 그 자리에 이유를 적는다.
+   *
+   * dangerouslySetInnerHTML 로 심은 조각이라 React 가 그 안쪽을 다시 그리지
+   * 않는다 — 직접 만져도 다음 렌더에 되돌려지지 않는다.
+   */
+  useEffect(() => {
+    const root = bodyRef.current;
+    if (!root || !detail?.html) return;
+    const undo: (() => void)[] = [];
+    for (const img of Array.from(root.querySelectorAll("img"))) {
+      // src 가 없는 것은 자리 채우개다. 건드리면 없던 글자가 생긴다.
+      if (!img.getAttribute("src")) continue;
+      if (img.complete) {
+        // 이미 끝난 그림. naturalWidth 가 0 이면 못 받아 온 것이다.
+        if (img.naturalWidth === 0) markImageFailed(img);
+        continue;
+      }
+      img.classList.add("email-img-pending");
+      const done = () => img.classList.remove("email-img-pending");
+      const fail = () => markImageFailed(img);
+      img.addEventListener("load", done);
+      img.addEventListener("error", fail);
+      undo.push(() => {
+        img.removeEventListener("load", done);
+        img.removeEventListener("error", fail);
+      });
+    }
+    return () => undo.forEach((f) => f());
+  }, [detail?.html]);
+
+  // 서버가 본문에 얹어 보내는 첨부 목록·추적 픽셀 수. 없으면 빈 값이 온다.
+  const extras = readMailExtras(detail);
+
+  /**
+   * 첨부 한 조각을 받아 올 주소.
+   *
+   * 보관 사본에는 목록만 있고 바이트가 없다. 그 사본은 계정이 지워진 뒤에도
+   * 열리는 것이 존재 이유라(schema 의 `onDelete: "set null"`), 라이브 경로로
+   * 물을 대상 자체가 없을 수 있다. 그래서 null 을 주고, 화면은 단추 대신
+   * 가만한 목록을 그린다 — 눌러 보고 실패하는 것보다 낫다.
+   */
+  const attachmentUrl = (id: string): string | null => {
+    if (archiveId || !messageId) return null;
+    // attachmentPath 가 이미 apiPath 를 먹였고 아래에서 apiFetch 가 한 번 더
+    // 먹이지만, apiPath 는 접두어가 이미 붙은 주소를 그대로 돌려준다.
+    return attachmentPath(accountId, messageId, id);
+  };
 
   const open = !!messageId;
   const dateStr = detail
@@ -239,6 +317,35 @@ export function MessageModal({
             </div>
           )}
 
+          {/* 첨부와 알림 — 본문 위, 스크롤 밖.
+              긴 뉴스레터의 맨 아래까지 내려가야 첨부가 나오면 없는 것과 같다. */}
+          {/* 프록시로 나간 그림만 있는 메일도 알려야 한다 — 여기서
+              blockedTrackers 만 보면 안내 줄이 아예 안 그려져, "연 시각이
+              샌다" 는 사실을 사람이 볼 자리가 없어진다. */}
+          {detail &&
+            (extras.attachments.length > 0 ||
+              extras.blockedTrackers > 0 ||
+              (extras.proxiedImages ?? 0) > 0) && (
+              <div className="shrink-0 border-b border-(--color-border-soft) px-6 py-3">
+                {extras.attachments.length > 0 && (
+                  <AttachmentBar
+                    // 다른 메일로 넘어가면 받던 것·펼친 상태를 버린다
+                    key={`${archiveId ?? "live"}:${accountId}:${messageId}`}
+                    attachments={extras.attachments}
+                    urlFor={attachmentUrl}
+                    unavailableNote="보관 사본에는 첨부 목록만 남습니다 — 파일은 원본 메일을 열어 받아 주세요."
+                  />
+                )}
+                <BlockedTrackerNote
+                  blocked={extras.blockedTrackers}
+                  proxiedImages={extras.proxiedImages}
+                  // 보관 사본은 열 때마다 요청이 새로 나간다 — 시제가 다르다
+                  archived={!!archiveId}
+                  className={extras.attachments.length > 0 ? "mt-2.5" : undefined}
+                />
+              </div>
+            )}
+
           {/* 본문 */}
           <div className="scrollbar-thin flex-1 overflow-y-auto">
             {loading ? (
@@ -247,6 +354,7 @@ export function MessageModal({
               <ErrorBody message={error} />
             ) : detail?.html ? (
               <div
+                ref={bodyRef}
                 className="email-body bg-white p-6 text-[14px] leading-relaxed text-black"
                 style={{ wordBreak: "break-word" }}
                 dangerouslySetInnerHTML={{ __html: detail.html }}

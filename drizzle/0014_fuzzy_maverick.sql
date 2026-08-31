@@ -1,0 +1,1 @@
+ALTER TABLE `archived_messages` ADD `blocked_trackers` integer;

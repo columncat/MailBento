@@ -38,6 +38,22 @@ export interface ArchivedSummary {
   position: number;
 }
 
+/**
+ * 보관된 HTML 이 **열릴 때 바깥으로 부를** 그림 수.
+ *
+ * 왜 세느냐 — 보관 사본에는 원격 그림이 프록시 주소 그대로 남아 있다. 그래서
+ * 사본을 열 때마다 발신자에게 요청이 나가고 연 시각이 샌다. 라이브 메일에서는
+ * 그 사실을 화면에 적어 두었는데 보관본만 아무 말이 없었다.
+ *
+ * 보관 시점의 숫자를 담지 않고 **지금 문서를 세는** 이유: 상한(capHtml)에
+ * 걸려 그림이 빠졌을 수 있어, 보관 시점의 숫자는 "이 사본을 열면 무슨 일이
+ * 나는가" 를 더는 말해 주지 않는다.
+ */
+export function countProxiedImages(html: string | null): number {
+  if (!html) return 0;
+  return html.match(/\/api\/mail-image\?/g)?.length ?? 0;
+}
+
 export interface ArchivedDetail extends ArchivedSummary {
   to: MailAddress[];
   cc: MailAddress[];
@@ -45,6 +61,8 @@ export interface ArchivedDetail extends ArchivedSummary {
   html: string | null;
   text: string | null;
   truncated: boolean;
+  /** 보관 시점에 주소를 안 부른 그림 수. 모르면 null(그 칸이 생기기 전 사본). */
+  blockedTrackers: number | null;
 }
 
 /** 손상된 JSON 은 빈 배열로 — 위젯 저장소와 같은 폴백 관례. */
@@ -149,6 +167,7 @@ export function getArchived(id: number): ArchivedDetail | null {
     html: r.html,
     text: r.text,
     truncated: r.truncated === 1,
+    blockedTrackers: r.blockedTrackers,
   };
 }
 
@@ -171,6 +190,30 @@ export function toMailDetail(d: ArchivedDetail): MailMessageDetail {
     cc: d.cc,
     html: d.html,
     text: d.text,
+    /*
+     * 보관본에는 첨부가 없다.
+     *
+     * 첨부 바이트는 어디에도 담지 않기로 했으니(디스크에 남기지 않는다),
+     * 담지 않은 것을 목록으로만 세우면 누를 수 없는 단추가 된다 — 원본이
+     * IMAP 에서 사라진 뒤에도 열리는 것이 보관함의 뜻인데 그때 그 단추는
+     * 반드시 실패한다. 빈 목록이 정직하다.
+     */
+    attachments: [],
+    /*
+     * ── 보관본도 말을 해야 한다 ──
+     *
+     * 앞에서는 이 둘을 0 으로 굳혔다. 그래서 보관 사본을 열면 안내 줄이 아예
+     * 안 떴는데, **그 사본 HTML 에는 프록시 주소가 그대로 남아 있다** — 열
+     * 때마다 발신자에게 요청이 나가고 연 시각이 샌다. 라이브 메일에서 없앤
+     * 바로 그 침묵이 보관함에 남아 있었다.
+     *
+     * 나가는 그림 수는 **보관된 문서를 세어** 낸다(위 countProxiedImages).
+     * 안 부른 그림 수는 보관할 때 담아 둔 값을 쓰고, 모르면(옛 사본) 0 으로
+     * 둔다 — 0 일 때 화면은 그 대목을 아예 말하지 않으므로 없는 사실을
+     * 지어내지 않는다.
+     */
+    blockedTrackers: d.blockedTrackers ?? 0,
+    proxiedImages: countProxiedImages(d.html),
   };
 }
 
@@ -228,6 +271,7 @@ export function archiveMessage(
     truncated: htmlCut || textCut ? 1 : 0,
     read: flag.read ? 1 : 0,
     mark: flag.mark,
+    blockedTrackers: detail.blockedTrackers,
   };
 
   db.insert(A)
