@@ -18,7 +18,7 @@ export BOOTSTRAP_HASH
 
 OWNER="${BENTO_GITHUB_OWNER:-columncat}"
 REF="${BENTO_REF:-main}"
-REPOS="MailBento MemoBento PaperBento BentoAgent"
+REPOS="MailBento MemoBento PaperBento VoiceBento BentoAgent"
 
 # compose 는 v2 플러그인일 수도, v1 독립 실행 파일일 수도 있다.
 if docker compose version >/dev/null 2>&1; then
@@ -92,6 +92,85 @@ if [ "${BENTO_RESPAWNED:-}" != "1" ] && [ -n "${BOOTSTRAP_HASH:-}" ] \
   BENTO_RESPAWNED=1 exec ./bootstrap.sh "$@"
 fi
 
+# ── 전사 모델 ──
+#
+# VoiceBento 가 쓰는 parakeet 은 받는 것이 487MB, 풀면 671MB 다. 이미지에
+# 구우면 런타임이 562MB 에서 1.7GB 로 불고, 앱을 한 줄 고칠 때마다 그 층을
+# 다시 민다. 그래서 볼륨에 두고 여기서 채운다.
+#
+# **앱이 기동하며 받게 두면 안 된다.** 처음 전사를 누른 사람이 5분을 기다리고,
+# 받다 끊기면 반쪽 파일이 남아 그다음부터는 조용히 실패한다.
+#
+# **여기서 실패해도 스택을 세우지 않는다.** 모델이 없어서 못 도는 것은
+# VoiceBento 뿐인데, 여기서 exit 하면 메일함·메모함·논문함까지 함께 안 뜬다.
+# 그래서 이 블록만 `set -e` 를 피해 가며 경고만 남기고 지나간다.
+MODELS_DIR="data/voice-models"
+ASR_DIR="$MODELS_DIR/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8"
+ASR_URL="https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8.tar.bz2"
+ASR_SHA="5793d0fd397c5778d2cf2126994d58e9d56b1be7c04d13c7a15bb1b4eafb16bf"
+VAD_FILE="$MODELS_DIR/silero_vad.onnx"
+VAD_URL="https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/silero_vad.onnx"
+VAD_SHA="9e2449e1087496d8d4caba907f23e0bd3f78d91fa552479bb9c23ac09cbb1fd6"
+
+mkdir -p "$MODELS_DIR"
+
+sha_of() {
+  if command -v sha256sum >/dev/null 2>&1; then
+    sha256sum "$1" | cut -d' ' -f1
+  elif command -v shasum >/dev/null 2>&1; then
+    shasum -a 256 "$1" | cut -d' ' -f1
+  else
+    # 검사할 수단이 없으면 빈 값을 돌려준다. 아래에서 "어긋남" 이 아니라
+    # "검사 안 함" 으로 다룬다 — 도구가 없다고 모델을 버릴 이유는 없다.
+    echo ""
+  fi
+}
+
+if [ ! -f "$VAD_FILE" ]; then
+  echo "── VAD 모델 받기 (0.6MB)"
+  if curl -fL --retry 3 -o "$VAD_FILE.part" "$VAD_URL"; then
+    got="$(sha_of "$VAD_FILE.part")"
+    if [ -n "$got" ] && [ "$got" != "$VAD_SHA" ]; then
+      echo "  받은 것이 어긋납니다 ($got). 버립니다." >&2
+      rm -f "$VAD_FILE.part"
+    else
+      mv -f "$VAD_FILE.part" "$VAD_FILE"
+    fi
+  else
+    echo "  VAD 모델을 받지 못했습니다. 전사만 안 됩니다 — 나중에 다시 실행하세요." >&2
+    rm -f "$VAD_FILE.part"
+  fi
+fi
+
+# 다 풀렸는지는 tokens.txt 로 본다. 폴더만 있고 속이 반쪽인 경우를 걸러야 한다.
+if [ ! -f "$ASR_DIR/tokens.txt" ]; then
+  echo "── 전사 모델 받기 (487MB — 처음 한 번, 몇 분 걸립니다)"
+  ASR_TAR="$MODELS_DIR/.parakeet.tar.bz2"
+  if curl -fL --retry 3 -o "$ASR_TAR" "$ASR_URL"; then
+    got="$(sha_of "$ASR_TAR")"
+    if [ -n "$got" ] && [ "$got" != "$ASR_SHA" ]; then
+      echo "  받은 것이 어긋납니다 ($got). 버립니다." >&2
+      rm -f "$ASR_TAR"
+    elif tar -xjf "$ASR_TAR" -C "$MODELS_DIR"; then
+      rm -f "$ASR_TAR"
+      if [ ! -f "$ASR_DIR/tokens.txt" ]; then
+        echo "  풀린 자리가 예상과 다릅니다. $MODELS_DIR 안을 보고" >&2
+        echo "  폴더 이름을 $ASR_DIR 로 맞춰 주세요." >&2
+      fi
+    else
+      echo "  푸는 데 실패했습니다 (bzip2 가 없을 수 있습니다)." >&2
+      rm -f "$ASR_TAR"
+    fi
+  else
+    echo "  전사 모델을 받지 못했습니다. 전사만 안 됩니다 — 나중에 다시 실행하세요." >&2
+    rm -f "$ASR_TAR"
+  fi
+fi
+
+# 모델 볼륨은 읽기 전용으로 물린다. 안에서 chown 할 수 없으니 여기서 열어 둔다
+# (앱은 uid 1001 로 돌고 이 폴더는 이 계정이 만들었다).
+chmod -R a+rX "$MODELS_DIR" 2>/dev/null || true
+
 # 에이전트 이미지는 두 앱의 mcp/ 를 GitHub 에서 받아 만든다. 도커가 그 층을
 # 캐시하므로 저장소가 바뀐 날에는 값을 바꿔 줘야 다시 받는다. 그러지 않으면
 # 앱 API 가 바뀐 날 에이전트만 옛 MCP 를 들고 조용히 404 를 받는다.
@@ -110,6 +189,9 @@ $COMPOSE run --rm --no-deps --user 0 --entrypoint sh mailbento \
 $COMPOSE run --rm --no-deps --user 0 --entrypoint sh memobento \
   -c 'chown -R 1001:1001 /app/data' >/dev/null
 $COMPOSE run --rm --no-deps --user 0 --entrypoint sh paperbento \
+  -c 'chown -R 1001:1001 /app/data' >/dev/null
+# 모델 볼륨(/models)은 읽기 전용이라 여기 끼지 않는다. 위에서 chmod 로 열어 둔다.
+$COMPOSE run --rm --no-deps --user 0 --entrypoint sh voicebento \
   -c 'chown -R 1001:1001 /app/data' >/dev/null
 
 echo "── 시작"

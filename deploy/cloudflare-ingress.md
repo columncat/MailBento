@@ -1,7 +1,7 @@
 # Cloudflare 터널에 얹기
 
-한 도메인을 경로로 나눠 쓰는 배포(`bento.example.com/mail` · `/memo` · `/paper`)를
-터널 뒤에 두는 방법.
+한 도메인을 경로로 나눠 쓰는 배포(`bento.example.com/mail` · `/memo` · `/paper` ·
+`/voice`)를 터널 뒤에 두는 방법.
 
 ## 앱 쪽
 
@@ -12,6 +12,7 @@
 MAILBENTO_BASE_PATH=/mail
 MEMOBENTO_BASE_PATH=/memo
 PAPERBENTO_BASE_PATH=/paper
+VOICEBENTO_BASE_PATH=/voice
 ```
 
 ```sh
@@ -19,23 +20,36 @@ PAPERBENTO_BASE_PATH=/paper
 ```
 
 그리고 앱끼리 오가는 버튼 주소를 설정에 적는다. 비워 두면 접속한 호스트의
-3000·3001·3002 포트로 유추하는데, 한 도메인을 나눠 쓰면 그 유추가 맞지 않는다.
+3000·3001·3002·3003 포트로 유추하는데, 한 도메인을 나눠 쓰면 그 유추가 맞지 않는다.
 
 ```
 # config/mailbento.env
 MEMOBENTO_URL='https://bento.example.com/memo'
 PAPERBENTO_URL='https://bento.example.com/paper'
+VOICEBENTO_URL='https://bento.example.com/voice'
 
 # config/memobento.env
 MAILBENTO_URL='https://bento.example.com/mail'
 PAPERBENTO_URL='https://bento.example.com/paper'
+VOICEBENTO_URL='https://bento.example.com/voice'
 
 # config/paperbento.env
 MAILBENTO_URL='https://bento.example.com/mail'
 MEMOBENTO_URL='https://bento.example.com/memo'
+VOICEBENTO_URL='https://bento.example.com/voice'
+
+# config/voicebento.env
+MAILBENTO_URL='https://bento.example.com/mail'
+MEMOBENTO_URL='https://bento.example.com/memo'
+PAPERBENTO_URL='https://bento.example.com/paper'
 ```
 
-설치 마법사의 **주소** 칸에 적으면 이 세 파일에 알아서 들어간다.
+설치 마법사의 **주소** 칸에 적으면 이 네 파일에 알아서 들어간다.
+
+> 음성함만 주소가 둘이다. `MEMOBENTO_URL` 은 **사람이 누르는 버튼**의 주소이고,
+> 파일을 실제로 읽어 오는 주소는 `MEMOBENTO_API_URL`(`http://memobento:3000`)
+> 이다. 한 이름에 두 뜻을 담으면, 브라우저용 주소를 적는 순간 서버끼리의 호출이
+> 터널을 한 바퀴 돌아 나갔다 들어온다. 마법사가 둘을 따로 적는다.
 
 ## 터널 쪽
 
@@ -50,6 +64,7 @@ MEMOBENTO_URL='https://bento.example.com/memo'
 | `bento.example.com` | `^/mail(/\|$)` | `http://localhost:3000` |
 | `bento.example.com` | `^/memo(/\|$)` | `http://localhost:3001` |
 | `bento.example.com` | `^/paper(/\|$)` | `http://localhost:3002` |
+| `bento.example.com` | `^/voice(/\|$)` | `http://localhost:3003` |
 | (그 외) | | `http_status:404` |
 
 ### 경로는 글롭이 아니라 정규식이다. 앵커를 빼지 마라
@@ -66,6 +81,17 @@ MEMOBENTO_URL='https://bento.example.com/memo'
 
 `^` 로 앞을 묶고 `(/|$)` 로 뒤를 막는다. 그래야 `/paper` 와 `/paper/…` 만
 걸리고 `/papers-old` 나 `/x/paper` 는 안 걸린다.
+
+### 무료 플랜은 올리는 본문을 100MB 에서 끊는다
+
+음성함이 여기 걸린다. 한 시간짜리 영상은 대개 100MB 를 넘는데, 한 번에 보내면
+Cloudflare 가 앱에 닿기도 전에 413 으로 끊는다. 그래서 음성함과 논문함은 파일을
+**조각내 올린다** (`/api/upload/init|chunk|finish`, 조각 8MB). 조각 하나가 한
+요청이라 상한에 닿지 않는다.
+
+앱 쪽에서 이미 해 둔 일이라 터널에 손댈 것은 없다. 다만 "큰 파일만 413 이 난다"
+는 증상을 보면 조각 내기를 건너뛴 길을 의심하면 된다 — 손으로 만든 curl 이나
+에이전트 입구(`/api/agent/inbox`)는 한 번에 보낸다.
 
 **cloudflared 는 경로를 잘라 내지 않는다.** `/mail/settings` 로 들어온 요청은
 `/mail/settings` 그대로 앱에 닿는다. 그래서 앱 쪽에 `BASE_PATH` 가 필요하다 —
@@ -103,6 +129,8 @@ curl -X PUT "$API/accounts/$ACCOUNT/cfd_tunnel/$TUNNEL/configurations" \
           "service": "http://localhost:3001" },
         { "hostname": "bento.example.com", "path": "^/paper(/|$)",
           "service": "http://localhost:3002" },
+        { "hostname": "bento.example.com", "path": "^/voice(/|$)",
+          "service": "http://localhost:3003" },
         { "service": "http_status:404" }
       ]
     }
@@ -123,6 +151,7 @@ curl -X PUT "$API/accounts/$ACCOUNT/cfd_tunnel/$TUNNEL/configurations" \
 ```sh
 curl -sI https://bento.example.com/mail    # 307 → /mail/login
 curl -sI https://bento.example.com/paper   # 307 → /paper/login
+curl -sI https://bento.example.com/voice   # 307 → /voice/login
 curl -s  https://bento.example.com/mail/api/agent/chat   # 401 JSON (로그인 전)
 ```
 

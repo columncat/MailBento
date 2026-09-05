@@ -1,8 +1,8 @@
 # Bento 스택
 
-메일함(MailBento) · 메모함(MemoBento) · 논문함(PaperBento) · 에이전트(BentoAgent)
-네 컨테이너를 한 스택으로 띄운다. 넷은 `bento` 네트워크 하나에 들어가고,
-서로를 서비스 이름으로 부른다.
+메일함(MailBento) · 메모함(MemoBento) · 논문함(PaperBento) · 음성함(VoiceBento) ·
+에이전트(BentoAgent) 다섯 컨테이너를 한 스택으로 띄운다. 다섯은 `bento` 네트워크
+하나에 들어가고, 서로를 서비스 이름으로 부른다.
 
 ## 새 기계에 설치
 
@@ -14,11 +14,23 @@ chmod +x bootstrap.sh
 ./bootstrap.sh
 ```
 
-저장소 넷을 받아 이미지를 만들고 컨테이너를 띄운다. 첫 빌드는 몇 분 걸린다
-(에이전트 이미지가 Claude Code CLI 를 통째로 설치한다).
+저장소 다섯을 받아 이미지를 만들고 컨테이너를 띄운다. 첫 빌드는 몇 분 걸린다
+(에이전트 이미지가 Claude Code CLI 를 통째로 설치하고, 음성함이 쓸 전사 모델
+487MB 를 함께 받는다).
 
 끝나면 브라우저로 **`http://<이 기계 주소>:3000`** 을 연다. 설치 마법사가
-떠 있다. 값을 채우고 저장하면 네 서비스가 차례로 올라온다.
+떠 있다. 값을 채우고 저장하면 다섯 서비스가 차례로 올라온다.
+
+### 전사 모델은 이미지가 아니라 볼륨에 산다
+
+음성함이 쓰는 parakeet 은 받는 것이 487MB, 풀면 671MB 다. 이미지에 구우면
+런타임이 562MB 에서 1.7GB 로 불고 앱을 한 줄 고칠 때마다 그 층을 다시 민다.
+`./bootstrap.sh` 가 `data/voice-models/` 에 받아 두고, 컨테이너는 거기를
+읽기 전용으로 본다. 이미 있으면 다시 받지 않는다.
+
+**받지 못해도 스택은 뜬다.** 모델이 없으면 전사만 안 되고 나머지 넷은 멀쩡하다.
+받다 실패하면 경고만 찍히므로, 나중에 `./bootstrap.sh` 를 다시 돌리면 이어서
+받는다.
 
 ### BentoAgent 는 비공개 저장소다
 
@@ -39,7 +51,7 @@ gh auth login        # repo 권한 필요
 
 | 칸 | 설명 |
 | --- | --- |
-| 접속 비밀번호 | 메일함·메모함·논문함에 같이 쓴다. 비우면 잠그지 않는다 |
+| 접속 비밀번호 | 메일함·메모함·논문함·음성함에 같이 쓴다. 비우면 잠그지 않는다 |
 | Claude 인증 | OAuth 토큰(구독) 또는 API 키(종량). 하나만 |
 | Discord | 봇 토큰·내 ID. 켜고 끌 수 있다 |
 | 주소 | 앱끼리 오가는 버튼용. 비우면 접속한 호스트에서 유추 |
@@ -76,11 +88,13 @@ gh auth login        # repo 권한 필요
 bento/
   config/        설정 (마법사가 적는다. 0600, 컨테이너 사용자 소유)
   data/
-    mailbento/   메일 DB
-    memobento/   메모 DB · 올린 파일
-    paperbento/  논문 DB · 올린 PDF · 표지
-    bentoagent/  세션 · 예약 · 기록
-    claude-home/ 대화 기록
+    mailbento/     메일 DB
+    memobento/     메모 DB · 올린 파일 (소리·영상도 여기 산다)
+    paperbento/    논문 DB · 올린 PDF · 표지
+    voicebento/    전사문 DB (파일은 안 든다 — 메모함의 것을 fileId 로 읽는다)
+    voice-models/  전사 모델 (bootstrap.sh 가 받는다, 671MB)
+    bentoagent/    세션 · 예약 · 기록
+    claude-home/   대화 기록
   src/           받아 둔 저장소 (빌드에 쓴다)
 ```
 
@@ -96,6 +110,7 @@ bento/
 MAILBENTO_PORT=3000
 MEMOBENTO_PORT=3001
 PAPERBENTO_PORT=3002
+VOICEBENTO_PORT=3003
 AGENT_PORT=4000
 ```
 
@@ -131,3 +146,20 @@ AGENT_PORT=4000
 cp config/memobento.env config/paperbento.env   # 그 뒤 MAILBENTO_DB_PATH 줄만 지운다
 docker compose restart paperbento
 ```
+
+음성함은 두 줄이 더 필요하다. 파일이 메모함에 살아서, 브라우저가 아니라 **서버가**
+메모함을 부른다.
+
+```sh
+cp config/paperbento.env config/voicebento.env
+cat >> config/voicebento.env <<'EOF'
+MEMOBENTO_API_URL='http://memobento:3000'
+MEMOBENTO_PASSWORD='<접속 비밀번호와 같은 값>'
+EOF
+docker compose restart voicebento
+```
+
+**전사가 안 되고 모델이 없다고 나온다** — `data/voice-models/` 를 본다.
+`sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/tokens.txt` 와 `silero_vad.onnx` 가
+둘 다 있어야 한다. 없으면 `./bootstrap.sh` 를 다시 돌린다 — 받다 끊긴 것은
+버리고 다시 받는다.

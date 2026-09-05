@@ -2,8 +2,9 @@
 /**
  * 설치 마법사.
  *
- * 아무것도 설정되지 않은 새 기계에서 처음 뜨는 화면이다. 네 컨테이너(메일함·
- * 메모함·논문함·에이전트)가 필요한 값을 여기서 한 번에 받아 `/config` 에 적는다.
+ * 아무것도 설정되지 않은 새 기계에서 처음 뜨는 화면이다. 다섯 컨테이너(메일함·
+ * 메모함·논문함·음성함·에이전트)가 필요한 값을 여기서 한 번에 받아 `/config` 에
+ * 적는다.
  *
  * 왜 앱이 아니라 따로 도는 작은 서버인가 — 메일함 앱은 암호화 키가 없으면
  * 아예 뜨지 못한다. 설정이 없을 때 앱을 억지로 띄우려면 그 검사부터 헐겁게
@@ -174,6 +175,10 @@ const HTML = String.raw`<!doctype html>
           <label>논문함 주소</label>
           <input type="text" name="paperbentoUrl" placeholder="예: https://paper.example.com">
         </div>
+        <div>
+          <label>음성함 주소</label>
+          <input type="text" name="voicebentoUrl" placeholder="예: https://voice.example.com">
+        </div>
       </div>
       <label>업로드 한 개 최대 크기 (MB)</label>
       <input type="number" name="maxUploadMb" value="5120" min="1">
@@ -184,7 +189,7 @@ const HTML = String.raw`<!doctype html>
 
   <div class="done" id="done">
     <h2>설정을 저장했습니다</h2>
-    <p class="lede">네 서비스가 차례로 올라옵니다. 10초쯤 뒤 이 페이지가 알아서 메일함으로 넘어갑니다.</p>
+    <p class="lede">다섯 서비스가 차례로 올라옵니다. 10초쯤 뒤 이 페이지가 알아서 메일함으로 넘어갑니다.</p>
   </div>
 </main>
 
@@ -281,6 +286,7 @@ function save(input) {
   const mailbentoUrl = pick(input.mailbentoUrl);
   const memobentoUrl = pick(input.memobentoUrl);
   const paperbentoUrl = pick(input.paperbentoUrl);
+  const voicebentoUrl = pick(input.voicebentoUrl);
   const maxUploadMb = pick(input.maxUploadMb) || "5120";
 
   const shared = {
@@ -297,6 +303,7 @@ function save(input) {
       ENCRYPTION_KEY: encryptionKey,
       MEMOBENTO_URL: memobentoUrl,
       PAPERBENTO_URL: paperbentoUrl,
+      VOICEBENTO_URL: voicebentoUrl,
     }),
     { mode: 0o600 },
   );
@@ -307,6 +314,7 @@ function save(input) {
       ...shared,
       MAILBENTO_URL: mailbentoUrl,
       PAPERBENTO_URL: paperbentoUrl,
+      VOICEBENTO_URL: voicebentoUrl,
       MAX_UPLOAD_MB: maxUploadMb,
       // Corkboard 와 Memo 메모함은 메일함과 같은 자료를 쓴다. 이 경로가 없으면
       // 두 앱이 각자의 사본을 보게 되어 한쪽에서 고친 것이 다른 쪽에 안 보인다.
@@ -325,7 +333,43 @@ function save(input) {
       ...shared,
       MAILBENTO_URL: mailbentoUrl,
       MEMOBENTO_URL: memobentoUrl,
+      VOICEBENTO_URL: voicebentoUrl,
       MAX_UPLOAD_MB: maxUploadMb,
+    }),
+    { mode: 0o600 },
+  );
+
+  /*
+   * 음성함. 여기만 메모함 주소가 둘이다.
+   *
+   * `MEMOBENTO_URL` 은 **사람이 누르는 버튼**의 주소다 — 비어 있을 수도 있고,
+   * 한 도메인을 나눠 쓰면 `https://…/memo` 같은 바깥 주소가 들어간다.
+   * 그런데 음성함은 올린 소리를 **서버가** 읽어 온다 (파일은 메모함의 `Voice`
+   * 메모함에 산다). 한 이름에 두 뜻을 담으면, 바깥 주소를 적는 순간 컨테이너
+   * 사이의 호출이 터널을 한 바퀴 돌아 나갔다 들어온다. 그래서 안쪽 주소는
+   * 따로 `MEMOBENTO_API_URL` 로 준다.
+   *
+   * 비밀번호도 함께 준다. MCP 와 같은 이유다 — 메모함의 파일 라우트는 로그인
+   * 경계 안이라, 부르는 쪽이 사람과 같은 입구로 먼저 로그인해야 한다.
+   *
+   * 모델 경로는 compose 가 물려 주는 자리를 그대로 가리킨다. 이미지에 굽지
+   * 않고 볼륨에 두기 때문에 앱은 경로만 알면 된다.
+   */
+  writeFileSync(
+    join(CONFIG_DIR, "voicebento.env"),
+    envFile({
+      ...shared,
+      MAILBENTO_URL: mailbentoUrl,
+      MEMOBENTO_URL: memobentoUrl,
+      PAPERBENTO_URL: paperbentoUrl,
+      MEMOBENTO_API_URL: "http://memobento:3000",
+      MEMOBENTO_PASSWORD: password,
+      MAX_UPLOAD_MB: maxUploadMb,
+      ASR_MODEL_DIR: "/models/sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8",
+      VAD_MODEL_PATH: "/models/silero_vad.onnx",
+      // 물리 4코어라 4가 가장 빠르다. 8은 2보다도 느리다 (10분 오디오:
+      // 1스레드 97.5초 · 2스레드 67.3초 · 4스레드 57.0초 · 8스레드 78.7초).
+      ASR_THREADS: "4",
     }),
     { mode: 0o600 },
   );
@@ -348,6 +392,11 @@ function save(input) {
       MEMOBENTO_PASSWORD: password,
       MAILBENTO_URL: "http://mailbento:3000",
       MAILBENTO_PASSWORD: password,
+      // 음성함은 아직 mcp/ 가 없다. 부르는 방향이 반대라서다 — 저쪽이
+      // `/voice/*` 로 이쪽에 다듬기와 대화를 맡긴다. 그래도 주소는 미리 준다.
+      // 에이전트가 전사문을 되짚어 볼 일이 생기면 그때 이 값이 쓰인다.
+      VOICEBENTO_URL: "http://voicebento:3000",
+      VOICEBENTO_PASSWORD: password,
     }),
     { mode: 0o600 },
   );
