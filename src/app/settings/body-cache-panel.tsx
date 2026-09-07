@@ -15,11 +15,13 @@ function mb(bytes: number): string {
 export interface BodyCacheInfo {
   count: number;
   bytes: number;
+  /** 그중 수집기가 미리 받아 둔(아직 아무도 안 연) 통수. */
+  prefetched: number;
   fileBytes: number;
 }
 
 /**
- * 열어 본 메일 본문 캐시를 비우는 자리.
+ * 메일 본문 캐시를 비우는 자리.
  *
  * 이 표를 만지는 코드는 캐시 모듈과 그것을 부르는 두 라우트뿐이라, 뭔가
  * 이상해 보여도 사람이 손댈 길이 없었다 — "계정을 통째로 지우거나 30일
@@ -44,7 +46,7 @@ export function BodyCachePanel({ initial }: { initial: BodyCacheInfo }) {
         file: { before: number; after: number };
         warning?: string;
       };
-      setInfo({ count: 0, bytes: 0, fileBytes: j.file.after });
+      setInfo({ count: 0, bytes: 0, prefetched: 0, fileBytes: j.file.after });
       setMsg({
         ok: !j.warning,
         text:
@@ -70,8 +72,10 @@ export function BodyCachePanel({ initial }: { initial: BodyCacheInfo }) {
             메일 본문 캐시
           </div>
           <div className="text-xs text-(--color-fg-4)">
-            열어 본 메일의 본문을 최대 100통까지 담아 두었다가 다시 열 때 씁니다.
-            비워도 메일은 그대로이고, 다음에 열 때 다시 받아 옵니다.
+            메일 본문을 최대 100통까지 담아 두었다가 열 때 씁니다. 열어 본
+            메일에 더해, 새로 온 메일은 자동 수집이 미리 받아 둡니다(최대
+            30통 — 나머지 70통은 열어 본 메일 몫으로 남습니다). 비워도 메일은
+            그대로이고, 다음에 열 때 다시 받아 옵니다.
           </div>
         </div>
         <button
@@ -91,6 +95,16 @@ export function BodyCachePanel({ initial }: { initial: BodyCacheInfo }) {
           <b className="font-medium text-(--color-fg)">{info.count}통</b> ·{" "}
           {mb(info.bytes)}
         </span>
+        {/*
+          0 이면 아무 말도 하지 않는다. 미리 받은 것이 없는 상태(막 비웠거나,
+          새 메일이 없었거나, MAIL_PREFETCH 로 꺼 두었거나)에 "미리 받음 0통"
+          이 서 있으면 무엇이 잘못됐다는 신호처럼 읽힌다.
+        */}
+        {info.prefetched > 0 && (
+          <span className="text-(--color-fg-4)">
+            그중 미리 받아 둠 {info.prefetched}통
+          </span>
+        )}
         <span className="flex items-center gap-1.5 text-(--color-fg-4)">
           <HardDrive className="h-3 w-3" />
           DB 파일 {mb(info.fileBytes)}

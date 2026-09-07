@@ -16,14 +16,36 @@ import type { MailMessageDetail } from "./providers/types";
  * 캐시가 사실상 한 세션짜리였다. 본문은 어차피 다시 받아 오면 그만이라
  * 잃어버려도 정합성에는 영향이 없지만, 안 잃어버리면 더 빠르다.
  *
- * **사람이 연 메일만 담긴다.** 미리 받아 두지 않는다 — 자동 수집을 안 하는
- * 결정(mail-poller 는 봉투만 받는다)은 그대로다.
+ * **두 종류가 한 표에 산다.** 사람이 열어서 담긴 것(prefetched=0)과 수집기가
+ * 새 메일을 보고 미리 받아 담은 것(prefetched=1). 둘의 축출 규칙이 다르다 —
+ * 아래 상한 주석 참고. (미리 받은 것을 **에이전트에게 보내지는 않는다.**
+ * 디스크에 받아 두는 것과 남이 쓴 글을 에이전트에게 먹이는 것은 다른 일이다.
+ * mail-poller 의 `handOff` 는 여전히 제목·보낸이만 넘긴다.)
  */
 
 const C = schema.messageBodyCache;
 
-/** 담아 둘 최대 통수. 넘으면 마지막으로 쓰인 지 오래된 것부터 버린다. */
+/**
+ * 담아 둘 최대 통수 — **두 종류를 합쳐서**. 넘으면 마지막으로 쓰인 지 오래된
+ * 것부터 버린다. 통당 상한과 곱해 100MB 가 이 캐시의 디스크 상한이다.
+ */
 const MAX_ENTRIES = 100;
+
+/**
+ * 그중 **미리 받은 것**이 차지할 수 있는 최대 통수.
+ *
+ * 이 줄이 없으면 미리 받기가 캐시를 망친다. 한 번 수집에 열 통을 미리 받으면
+ * 그 열 통이 `usedAt` 이 가장 새것이라, 사람이 어제 열어 본 열 통이 대신
+ * 밀려난다 — 사람은 자기가 방금 읽은 메일을 다시 열 때 느려지는 것을 겪고,
+ * 정작 미리 받아 둔 것은 열지도 않을 수 있다. **짐작이 실제를 밀어내면 안 된다.**
+ *
+ * 30 인 이유 — 수집이 10분마다 돌고 한 번에 최대 열 통을 미리 받으니(mail-poller
+ * 의 `PREFETCH_MAX`), 30 은 **가장 나쁜 경우로도 세 번의 수집**을 담는다. 새
+ * 메일이 10분에 열 통씩 쉬지 않고 쏟아지는 메일함에서만 30분이고, 보통의
+ * 메일함(수집 한 번에 한두 통)에서는 하루치가 넘게 남는다. 그 대가로 사람 몫은
+ * 어떤 경우에도 **70통 아래로 내려가지 않는다.**
+ */
+const MAX_PREFETCHED = 30;
 
 /**
  * 통당 상한. 이걸 없애면 data: 로 그림이 인라인된 한 통이 캐시를 통째로 먹는다
@@ -92,8 +114,18 @@ function viewFingerprint(account: Account): string {
 const rowWhere = (accountId: number, messageId: string) =>
   and(eq(C.accountId, accountId), eq(C.messageId, messageId));
 
+export interface RememberOptions {
+  /**
+   * 수집기가 **미리** 받아 둔 본문인가. 기본값은 false = 사람이 열어서 담긴 것.
+   *
+   * 부르는 쪽이 한 곳뿐일 때는 인자가 아니라 함수를 나누는 편이 낫지만, 담고
+   * 버리는 규칙이 한 트랜잭션에 묶여 있어 둘로 나누면 그 규칙이 두 벌이 된다.
+   */
+  prefetched?: boolean;
+}
+
 /**
- * 본문을 캐시에 담는다 (upsert).
+ * 본문을 캐시에 담는다 (upsert). **담았으면 true.**
  *
  * 같은 메일을 두 요청이 동시에 열 수 있으므로 upsert 로 쓰고, 넣기와 버리기를
  * 한 트랜잭션에 묶는다 — 넣은 직후 다른 요청의 버리기가 끼어들어 방금 넣은
@@ -101,19 +133,26 @@ const rowWhere = (accountId: number, messageId: string) =>
  *
  * 계정 id 가 아니라 **계정 행**을 받는다. 지문을 여기서 직접 뽑기 위해서다 —
  * 부르는 쪽에 맡기면 언젠가 한 곳이 빠뜨린다.
+ *
+ * 돌려주는 값이 생긴 이유: 통당 상한(1MB)에 걸려 안 담기는 일이 **조용히**
+ * 일어난다. 사람이 여는 길에서는 그래도 화면에 본문이 뜨니 티가 안 나도 되지만,
+ * 미리 받기는 담기지 않으면 한 일이 통째로 헛수고다 — 몇 통이 헛수고였는지
+ * 로그에 적으려면 부르는 쪽이 알아야 한다.
  */
 export function rememberDetail(
   account: Account,
   messageId: string,
   detail: MailMessageDetail,
-): void {
+  options?: RememberOptions,
+): boolean {
   const json = JSON.stringify(detail);
   const bytes = Buffer.byteLength(json);
-  if (bytes > MAX_BYTES) return;
+  if (bytes > MAX_BYTES) return false;
 
   const accountId = account.id;
   const view = viewFingerprint(account);
   const now = Date.now();
+  const prefetched = options?.prefetched ? 1 : 0;
 
   db.transaction((tx) => {
     tx.insert(C)
@@ -126,6 +165,7 @@ export function rememberDetail(
         bytes,
         storedAt: now,
         usedAt: now,
+        prefetched,
       })
       .onConflictDoUpdate({
         target: [C.accountId, C.messageId],
@@ -136,6 +176,18 @@ export function rememberDetail(
           bytes,
           storedAt: now,
           usedAt: now,
+          /*
+           * **내려가지는 않는다.** 사람이 이미 열어 본 자리(0)를 미리 받기가
+           * 덮어써 1 로 만들면, 사람이 열어 본 본문이 미리 받기 몫(30통)에
+           * 앉아 그 안에서 밀려난다. 반대(1 → 0)는 언제든 옳다 — 사람이 열면
+           * 그때부터 짐작이 아니다.
+           *
+           * 미리 받기는 **처음 보는 UID** 만 대상이라 부딪힐 일이 거의 없지만,
+           * 목록을 받은 뒤 미리 받기까지의 몇 초 사이에 사람이 그 메일을 열면
+           * 실제로 부딪힌다. 한 줄로 막을 수 있는 것을 확률에 맡기지 않는다.
+           * (`min` 안의 열 이름은 SQLite upsert 에서 **원래 행**의 값이다.)
+           */
+          prefetched: sql`min(${C.prefetched}, ${prefetched})`,
         },
       })
       .run();
@@ -143,18 +195,43 @@ export function rememberDetail(
     // 낡은 것 먼저 (UID 재사용 위험). 개수 상한과 무관하게 항상 턴다.
     tx.delete(C).where(lt(C.storedAt, now - TTL_MS)).run();
 
-    // 그러고도 넘치면 마지막으로 쓰인 지 오래된 것부터.
-    // LIMIT -1 OFFSET n = "최신 n개를 뺀 나머지 전부" (SQLite 관용구).
+    /*
+     * 그러고도 넘치면 마지막으로 쓰인 지 오래된 것부터 — 다만 **두 종류를
+     * 따로 센다.** 미리 받은 것을 먼저 30통으로 깎고, 사람 몫은 남은 자리
+     * (100 - 미리 받은 수, 즉 언제나 70 이상)만큼 남긴다.
+     *
+     * 순서가 중요하다: 미리 받은 것을 먼저 깎아야 아래 뺄셈이 30 을 넘지 않고,
+     * 사람 몫의 바닥(70)이 선다. 합은 어느 경우에도 100 을 넘지 않아
+     * 디스크 상한(100MB)은 그대로다.
+     *
+     * LIMIT -1 OFFSET n = "최신 n개를 뺀 나머지 전부" (SQLite 관용구).
+     */
     tx.delete(C)
       .where(
         sql`(${C.accountId}, ${C.messageId}) IN (
           SELECT ${C.accountId}, ${C.messageId} FROM ${C}
+          WHERE ${C.prefetched} = 1
           ORDER BY ${C.usedAt} DESC
-          LIMIT -1 OFFSET ${MAX_ENTRIES}
+          LIMIT -1 OFFSET ${MAX_PREFETCHED}
+        )`,
+      )
+      .run();
+
+    tx.delete(C)
+      .where(
+        sql`(${C.accountId}, ${C.messageId}) IN (
+          SELECT ${C.accountId}, ${C.messageId} FROM ${C}
+          WHERE ${C.prefetched} = 0
+          ORDER BY ${C.usedAt} DESC
+          LIMIT -1 OFFSET (
+            ${MAX_ENTRIES} - (SELECT count(*) FROM ${C} WHERE ${C.prefetched} = 1)
+          )
         )`,
       )
       .run();
   });
+
+  return true;
 }
 
 /**
@@ -164,9 +241,27 @@ export function rememberDetail(
  * 읽음·표식은 여기서 오지 않는다. 담긴 JSON 의 unread/mark 는 담을 당시의
  * 값이라 이미 낡았을 수 있고, 부르는 쪽이 message_flags 에서 읽어 덮어 얹는다.
  */
+export interface PeekOptions {
+  /**
+   * **사람이 한 번이라도 연 본문만** 꺼낸다 (미리 받아 둔 것은 못 본 척한다).
+   *
+   * 보관 라우트가 쓴다. 그쪽은 IMAP 이 죽었을 때 캐시로 물러나는데, 미리
+   * 받기가 생기기 전에는 이 캐시에 **사람이 열어 본 메일만** 있었으므로 그
+   * 갈래가 좁았다. 이제는 아무도 안 연 새 메일도 캐시에 있어, 그런 메일을
+   * 보관하면 `embed` 대신 `link` 판이 조용히 굳는다 — 그림이 원본을 가리키는
+   * 주소라 메일이 사라지면 깨진다. 바로 그것을 막으려고 embed 가 있다.
+   *
+   * 좁히는 쪽을 골랐다. 사람이 안 연 메일을 IMAP 이 죽은 사이에 보관하는
+   * 것은 드문 일이고, 그때는 502 로 **왜 안 됐는지 말하는 편**이 깨질 본문을
+   * 말없이 굳히는 것보다 낫다.
+   */
+  humanOnly?: boolean;
+}
+
 export function peekDetail(
   account: Account,
   messageId: string,
+  opts: PeekOptions = {},
 ): MailMessageDetail | null {
   const accountId = account.id;
   const row = db.select().from(C).where(rowWhere(accountId, messageId)).get();
@@ -188,6 +283,9 @@ export function peekDetail(
   if (row.format !== FORMAT) return drop();
   if (now - row.storedAt > TTL_MS) return drop();
 
+  // 안 지운다 — 사람이 그 메일을 열면 그때 제 몫을 한다.
+  if (opts.humanOnly && row.prefetched) return null;
+
   let detail: MailMessageDetail;
   try {
     const parsed = JSON.parse(row.detail) as MailMessageDetail;
@@ -198,9 +296,21 @@ export function peekDetail(
     return drop();
   }
 
-  // LRU 는 "마지막으로 담은" 이 아니라 "마지막으로 쓰인" 순서다 — 꺼낼 때도 올린다.
-  // (storedAt 은 건드리지 않는다. 자주 열어 봤다고 본문이 새것이 되지는 않는다.)
-  db.update(C).set({ usedAt: now }).where(rowWhere(accountId, messageId)).run();
+  /*
+   * LRU 는 "마지막으로 담은" 이 아니라 "마지막으로 쓰인" 순서다 — 꺼낼 때도 올린다.
+   * (storedAt 은 건드리지 않는다. 자주 열어 봤다고 본문이 새것이 되지는 않는다.)
+   *
+   * 여기서 `prefetched` 를 함께 내린다. **여기까지 오는 것은 사람이 메일을
+   * 여는 길뿐이다**(보관은 `humanOnly` 로 위에서 돌아선다) — 적중했다는 것은
+   * 미리 받아 둔 짐작이 맞았다는 뜻이고,
+   * 그 순간부터 이 본문은 사람이 열어 본 본문이다. 안 내리면 미리 받기 몫
+   * 30통 안에 계속 앉아, 사람이 방금 읽은 메일이 다음 수집에 밀려난다.
+   */
+  db
+    .update(C)
+    .set({ usedAt: now, prefetched: 0 })
+    .where(rowWhere(accountId, messageId))
+    .run();
 
   return detail;
 }
@@ -210,6 +320,14 @@ export interface DetailCacheStats {
   count: number;
   /** detail JSON 바이트 합. 파일 크기가 아니라 담긴 본문의 크기다. */
   bytes: number;
+  /**
+   * 그중 수집기가 **미리 받아 둔** 통수 (아직 사람이 안 연 것).
+   *
+   * 화면에 따로 세우는 이유: 미리 받기가 실제로 돌고 있는지, 그리고 그것이
+   * 캐시의 얼마를 먹고 있는지를 사람이 볼 수 있어야 한다. 이 수가 늘 상한
+   * (30)에 붙어 있으면 미리 받는 양이 읽는 속도보다 많다는 뜻이다.
+   */
+  prefetched: number;
 }
 
 /** 지금 몇 통 · 몇 바이트가 담겨 있나. 설정 화면이 보여 준다. */
@@ -218,10 +336,15 @@ export function detailCacheStats(): DetailCacheStats {
     .select({
       count: sql<number>`count(*)`,
       bytes: sql<number>`coalesce(sum(${C.bytes}), 0)`,
+      prefetched: sql<number>`coalesce(sum(${C.prefetched}), 0)`,
     })
     .from(C)
     .get();
-  return { count: row?.count ?? 0, bytes: row?.bytes ?? 0 };
+  return {
+    count: row?.count ?? 0,
+    bytes: row?.bytes ?? 0,
+    prefetched: row?.prefetched ?? 0,
+  };
 }
 
 /**

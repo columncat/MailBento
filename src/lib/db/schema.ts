@@ -261,6 +261,20 @@ export const messageBodyCache = sqliteTable(
     storedAt: integer("stored_at").notNull(),
     /** 마지막으로 담거나 꺼내 쓴 시각 (unix **ms**). LRU 기준. */
     usedAt: integer("used_at").notNull(),
+
+    /**
+     * 이 본문을 **사람이 열어서** 담았나(0), 수집기가 **미리 받아** 담았나(1).
+     *
+     * 한 표에 두 종류가 섞여 살기 때문에 필요하다. 미리 받기는 사람이 열지도
+     * 않은 본문을 캐시에 밀어 넣는 일이라, 순수한 LRU 로 두면 방금 미리 받은
+     * 열 통이 사람이 어제 열어 본 열 통을 밀어낸다 — 있으나 마나 한 캐시가
+     * 되는 쪽은 **사람 쪽**이다. 그래서 이 열로 둘을 갈라 각자의 상한을 준다
+     * (message-detail-cache.ts 의 축출 참고).
+     *
+     * 사람이 실제로 열면 1 → 0 으로 올라간다. 그 순간부터는 짐작이 아니라
+     * 진짜 열어 본 본문이라, 미리 받기 몫을 더 차지할 이유가 없다.
+     */
+    prefetched: integer("prefetched").notNull().default(0),
   },
   (t) => ({
     pk: primaryKey({ columns: [t.accountId, t.messageId] }),

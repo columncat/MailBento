@@ -75,6 +75,7 @@ npm run dev
 | `AUTH_SECRET` | (없음) | 세션 쿠키 암호화 키 (32바이트 base64) |
 | `MEMOBENTO_URL` | (없음) | 헤더의 MemoBento 버튼 주소. 비우면 자동 유추 |
 | `AGENT_URL` · `AGENT_TOKEN` | (없음) | 에이전트 채팅 (아래 참고) |
+| `MAIL_PREFETCH` | (켜짐) | 새 메일의 본문을 자동 수집이 미리 받아 둔다. `0`/`off`/`false`/`no` 로 끔 |
 
 ```bash
 openssl rand -base64 32   # ENCRYPTION_KEY / AUTH_SECRET 생성

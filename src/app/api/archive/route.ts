@@ -82,7 +82,9 @@ export async function POST(req: NextRequest) {
    * 본문을 담아 두면 다음에 그 메일을 열 때 `data:` 로 그림이 통째로 박힌
    * 본문이 나가고, 1MB 상한에 걸려 조용히 캐시가 안 되던 그 상태로 돌아간다.
    */
-  if (!detail) detail = peekDetail(account, messageId);
+  // humanOnly: 아무도 안 연 메일(미리 받아 둔 것)을 여기서 굳히지 않는다.
+  // 그 판은 `link` 라 그림이 원본을 가리키고, 원본이 사라지면 깨진다.
+  if (!detail) detail = peekDetail(account, messageId, { humanOnly: true });
   if (!detail) {
     return NextResponse.json(
       { error: fetchError ?? "메일을 가져오지 못해 보관하지 못했습니다" },
