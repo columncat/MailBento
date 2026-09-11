@@ -12,6 +12,7 @@ import {
   withImapConnection,
   type ImapConnectOptions,
 } from "../imap-client";
+import { imapErrorDetail } from "../imap-error";
 import { borrowImapConnection } from "../imap-pool";
 import { sniffImageType } from "../image-bytes";
 import { imageProxyPath } from "../mail-image-proxy";
@@ -590,6 +591,33 @@ const PEEK_BYTES = 128 * 1024;
 const MIN_SKIP_BYTES = 256 * 1024;
 
 /**
+ * 뒤를 이어 받을 때 **한 왕복에 청하는 최대 바이트.**
+ *
+ * 왜 값을 굳이 정하는가 — 앞에서는 `{ start: from }` 만 넘겼고, imapflow 는
+ * 그러면 `BODY.PEEK[]<131072>` 처럼 **숫자 하나짜리** 부분 지정을 짓는다
+ * (`commands/fetch.js`: maxLength 가 없으면 partial 에 start 만 넣는다).
+ * 그런데 RFC 3501 §9 의 **요청** 문법은 `BODY.PEEK section ["<" number "."
+ * nz-number ">"]` — 시작과 길이가 **둘 다** 있어야 한다. 숫자 하나짜리는
+ * **응답** 쪽 문법(msg-att-static)이지 요청 문법이 아니다. 문법을 곧이곧대로
+ * 지키는 서버는 그 FETCH 를 `BAD` 로 거절하고, 우리에게는 `Command failed`
+ * 한 문장만 남는다. 흉내 서버로 재현했더니 운영 로그와 글자 하나 안 틀렸다.
+ *
+ * 길이를 주면 `<131072.8388608>` 이 되어 문법에 맞는다. 다만 "끝까지" 를
+ * 뜻하는 무한대를 쓸 수는 없으니(그 자리는 32비트 수다), **덩이로 나눠 받고
+ * 청한 것보다 적게 오면 거기가 끝**으로 본다 — 이 파일이 이미 첫 왕복에서
+ * 쓰는 것과 **똑같은 잣대**다. RFC822.SIZE 를 안 믿기로 한 이유(위 fetch
+ * 주석)가 여기에도 그대로 적용된다.
+ *
+ * 8MB 로 잡은 이유: 이 길로 오는 메일은 128KB~수MB 가 대부분이라 거의 언제나
+ * 왕복 하나로 끝난다. 더 크게 잡으면 서버가 한 번에 밀어내는 양이 늘어 첫
+ * 바이트까지 걸리는 시간만 길어진다.
+ */
+const RESUME_CHUNK_BYTES = 8 * 1024 * 1024;
+
+/** 이어 받기가 도는 최대 왕복 수. 서버가 이상하게 굴어도 영영 돌지 않게. */
+const RESUME_MAX_ROUNDS = 64;
+
+/**
  * 본문을 만드는 데 쓰는 재료. 두 길(원문 통째 / 조각만)이 같은 모양을 낸다.
  */
 interface MessageBody {
@@ -687,8 +715,16 @@ async function fetchBodyParts(
   );
   if (!res) return null;
   const headers = res.headers as Buffer | undefined;
-  // 본문 조각이 아예 없는 메일(첨부만 든 메일)도 있다 — 그때는 헤더만 온다.
-  if (!headers || (bodies.length > 0 && !res.bodyParts)) return null;
+  /*
+   * 본문 조각이 아예 없는 메일(첨부만 든 메일)도 있다 — 그때는 헤더만 온다.
+   *
+   * **길이 0 도 못 받은 것으로 친다.** `Buffer.alloc(0)` 은 참이라 `!headers`
+   * 로는 안 걸리는데, 빈 헤더를 파서에 먹이면 보낸이도 제목도 없는 결과가
+   * 조용히 나온다. 헤더가 0바이트인 메일은 없다(RFC 상 있을 수 없다) —
+   * 그러니 이것은 언제나 서버가 안 준 것이고, 예전 길로 물러날 자리다.
+   */
+  if (!headers || !headers.length) return null;
+  if (bodies.length > 0 && !res.bodyParts) return null;
 
   const got = new Map<string, Buffer>();
   for (const [k, v] of res.bodyParts ?? []) got.set(k.toLowerCase(), v);
@@ -789,19 +825,97 @@ async function fetchBodyParts(
   };
 }
 
-/** 앞서 받아 둔 `from` 바이트 **뒤를** 이어 받는다. 버리는 바이트가 없다. */
+/**
+ * 앞서 받아 둔 `from` 바이트 **뒤를** 이어 받는다. 버리는 바이트가 없다.
+ *
+ * 덩이로 나눠 청하고 **청한 것보다 적게 오면 거기가 끝**이다 (위
+ * `RESUME_CHUNK_BYTES` 주석 — 왜 길이를 꼭 줘야 하는지가 거기 있다).
+ * 못 받았으면 던진다. 조용히 빈 버퍼를 돌려주면 부르는 쪽이 "여기가 끝" 으로
+ * 읽어 **잘린 원문을 파서에 먹인다** — 이 파일이 통째로 막으려는 그 고장이다.
+ */
 async function fetchSourceFrom(
   client: ImapFlow,
   uid: number,
   from: number,
 ): Promise<Buffer> {
-  const res = await client.fetchOne(
+  const chunks: Buffer[] = [];
+  let at = from;
+  /**
+   * **끝을 봤는가.** 바퀴가 다해서 나온 것과 끝까지 받아서 나온 것을 가른다.
+   *
+   * 이게 없으면 `RESUME_MAX_ROUNDS` 를 다 쓴 자리에서 **받다 만 바이트를**
+   * **다 받은 것처럼** 돌려주고, 부르는 쪽이 그걸 파서에 먹여 **잘린 본문이**
+   * **30일짜리 캐시에 앉는다.** 바로 위 주석이 막겠다고 적어 둔 그 고장이다.
+   *
+   * 지금 값(64바퀴 × 8MB = 512MB)으로는 닿지 않는다. 하지만
+   * `RESUME_CHUNK_BYTES` 는 "첫 바이트가 언제 오나" 를 보고 정한 **손잡이**라
+   * 다음 사람이 낮출 수 있다. 실측: 64KB 로 낮추고 14MB 짜리를 열면 4,224KB
+   * 에서 말없이 잘린 채 **200 으로 나가고 캐시에 앉았다.** 경고 한 줄도 없다.
+   */
+  let done = false;
+  for (let round = 0; round < RESUME_MAX_ROUNDS; round++) {
+    const res = await client.fetchOne(
+      String(uid),
+      { uid: true, source: { start: at, maxLength: RESUME_CHUNK_BYTES } },
+      { uid: true },
+    );
+    if (!res) throw new Error(`이어 받기에 응답이 없다 (UID ${uid} @${at})`);
+    const got = res.source;
+    /*
+     * `Buffer.isBuffer` 로 본다 — 서버가 길이 0 리터럴(`{0}`)로 답하면
+     * imapflow 의 토큰 파서가 그 자리를 꺼내 쓰지 않아 값이 `undefined` 로
+     * 남는다(같은 함정을 `fetchBodyParts` 가 이미 그물로 잡고 있다).
+     * `?? Buffer.alloc(0)` 로 뭉개면 "다 받았다" 로 읽혀 원문이 잘린다.
+     */
+    if (!Buffer.isBuffer(got)) {
+      throw new Error(`이어 받기에 원문이 없다 (UID ${uid} @${at})`);
+    }
+    /*
+     * 정확히 경계에서 끝난 메일. **지금 imapflow 로는 여기 못 온다** — 그런
+     * 메일에서 서버가 주는 것은 길이 0 리터럴이고, 그것은 위 `isBuffer` 에서
+     * 먼저 걸려 던진다(그러면 통째로 다시 받는다. 값은 왕복 둘과 바이트
+     * 두 배다. 본문은 옳다). imapflow 가 `{0}` 을 빈 버퍼로 넘기게 되는 날
+     * 이 줄이 살아나 그 값을 없앤다. 죽어 보인다고 지우지 마라.
+     */
+    if (!got.length) {
+      done = true;
+      break;
+    }
+    chunks.push(got);
+    at += got.length;
+    if (got.length < RESUME_CHUNK_BYTES) {
+      done = true; // 청한 것보다 적다 = 끝
+      break;
+    }
+  }
+  if (!done) {
+    throw new Error(
+      `이어 받기가 ${RESUME_MAX_ROUNDS}바퀴에도 안 끝났다 (UID ${uid} @${at})`,
+    );
+  }
+  return chunks.length === 1 ? chunks[0] : Buffer.concat(chunks);
+}
+
+/**
+ * **물러날 자리 — 원문을 통째로 청한다.** 74dc938 이전이 하던 그대로다.
+ *
+ * 부분 지정(`<0.131072>`)도, 조각 고르기도 없는 가장 단순한 FETCH 다. 그래서
+ * 앞의 빠른 길들이 서버에서 안 먹을 때 여기가 답한다. 봉투·구조도 함께 청하는
+ * 이유는, 첫 왕복이 통째로 던졌을 때 우리에게 **아무 재료도 없기** 때문이다.
+ */
+async function fetchWholeMessage(client: ImapFlow, uid: number) {
+  return client.fetchOne(
     String(uid),
-    { uid: true, source: { start: from } },
+    {
+      source: true,
+      envelope: true,
+      flags: true,
+      internalDate: true,
+      uid: true,
+      bodyStructure: true,
+    },
     { uid: true },
   );
-  if (!res) return Buffer.alloc(0);
-  return (res.source as Buffer | undefined) ?? Buffer.alloc(0);
 }
 
 /** 이 열기가 어디에 시간을 썼나. 운영 로그에 한 줄로 남는다. */
@@ -816,8 +930,25 @@ export interface FetchMessageTimings {
   render: number;
   /** IMAP 에서 실제로 끌어온 바이트. */
   bytes: number;
-  /** 어느 길로 갔나. */
-  path: "whole" | "resumed" | "parts";
+  /**
+   * 어느 길로 갔나.
+   *
+   * **초기값이 `"?"` 인 것이 중요하다.** 이 객체는 함수가 **끝까지 갔을 때만**
+   * 채워지는데 로그는 `finally` 에서 찍는다. 앞에서는 초기값이 `"whole"` ·
+   * `bytes: 0` 이라, 던진 열기가 로그에 `whole 0KB` 로 남았다 — "빈 원문을
+   * 통째로 받았다" 처럼 읽히는 **거짓말**이다. 운영에서 그 줄 열한 개를 놓고
+   * 빈 버퍼를 의심하느라 진짜 원인(서버의 NO)을 못 짚었다. 기본값은 사실처럼
+   * 읽히면 안 된다.
+   */
+  path: "?" | "whole" | "resumed" | "refetch" | "parts";
+  /** 첫 왕복에서 실제로 온 원문 앞부분의 바이트. 못 받았으면 -1. */
+  peek: number;
+  /**
+   * 만들어 낸 본문의 크기. **0/0 자체는 경보가 아니다** — 파일만 보낸 메일이
+   * 늘 그렇다. 첨부까지 없는데 0/0 이면 그때 본문이 사라진 것이다.
+   */
+  htmlBytes: number;
+  textBytes: number;
   /**
    * 조각 길을 두고 물러났다면 왜. 빈 글자면 물러날 일이 없었다는 뜻이다.
    *
@@ -828,37 +959,15 @@ export interface FetchMessageTimings {
   fallback: string;
 }
 
-export async function fetchMessageFromClient(
-  client: ImapFlow,
-  uid: number,
-  folder = "INBOX",
-  ctx: FetchMessageContext = { accountId: 0 },
-): Promise<MailMessageDetail> {
-  const lock = await client.getMailboxLock(folder);
-  try {
-    return await fetchMessageWithLock(client, uid, ctx);
-  } finally {
-    lock.release();
-  }
-}
-
 /**
- * 메일함 잠금을 **이미 쥔 채로** 부르는 길.
+ * 첫 왕복 — 구조·봉투와 함께 원문의 **앞부분만** 청한다.
  *
- * 연결 풀에서 빌린 연결은 빌릴 때 이미 잠금을 잡는다. 여기서 또 잡으면 같은
- * 연결의 잠금을 두 번 요구하는 셈이고, imapflow 의 잠금은 한 번에 하나라
- * **스스로를 기다리다 멎는다.**
+ * `fetchMessageWithLock` 안에 있던 것을 그대로 꺼냈다. 왜 꺼냈나 — 이 왕복은
+ * **던질 수 있고**(서버가 NO/BAD 로 거절한다), 던지면 물러날 자리가 필요하다.
+ * try 로 감싸려면 한 문장이어야 읽힌다.
  */
-export async function fetchMessageWithLock(
-  client: ImapFlow,
-  uid: number,
-  ctx: FetchMessageContext = { accountId: 0 },
-  timings?: FetchMessageTimings,
-): Promise<MailMessageDetail> {
-  const mode: InlineImageMode = ctx.inlineImages ?? "link";
-  const t0 = Date.now();
-
-  const result = await client.fetchOne(
+async function fetchPeekMessage(client: ImapFlow, uid: number) {
+  return client.fetchOne(
     String(uid),
     {
       /*
@@ -894,18 +1003,162 @@ export async function fetchMessageWithLock(
     },
     { uid: true },
   );
-  if (!result) {
-    throw new Error(`메시지를 찾을 수 없습니다 (UID ${uid})`);
+}
+
+export async function fetchMessageFromClient(
+  client: ImapFlow,
+  uid: number,
+  folder = "INBOX",
+  ctx: FetchMessageContext = { accountId: 0 },
+): Promise<MailMessageDetail> {
+  const lock = await client.getMailboxLock(folder);
+  try {
+    return await fetchMessageWithLock(client, uid, ctx);
+  } finally {
+    lock.release();
+  }
+}
+
+/**
+ * 메일함 잠금을 **이미 쥔 채로** 부르는 길.
+ *
+ * 연결 풀에서 빌린 연결은 빌릴 때 이미 잠금을 잡는다. 여기서 또 잡으면 같은
+ * 연결의 잠금을 두 번 요구하는 셈이고, imapflow 의 잠금은 한 번에 하나라
+ * **스스로를 기다리다 멎는다.**
+ */
+export async function fetchMessageWithLock(
+  client: ImapFlow,
+  uid: number,
+  ctx: FetchMessageContext = { accountId: 0 },
+  timings?: FetchMessageTimings,
+): Promise<MailMessageDetail> {
+  const mode: InlineImageMode = ctx.inlineImages ?? "link";
+  const t0 = Date.now();
+
+  /*
+   * **첫 왕복이 던져도 물러난다.** 서버가 `NO`/`BAD` 로 거절하면 imapflow 는
+   * 명령 종류와 무관하게 `Command failed` 한 문장만 던진다 — 그 한 문장이
+   * 라우트의 500 이 되어 사람 화면에 뜬 것이 이번 사고다. 실측으로 그 갈래도
+   * 아래 통짜 FETCH 한 번이면 **정상으로 열린다.**
+   *
+   * 사연은 여기서 꺼내 둔다. `err.message` 는 언제나 같은 문장이고, 서버가
+   * 실제로 한 말(`responseText`)과 죽은 명령(`executedCommand`)은 오류 객체에
+   * 붙어 있다. 그걸 안 찍어서 원인을 못 짚었다.
+   */
+  let peekResult: Awaited<ReturnType<typeof fetchPeekMessage>> | undefined;
+  let peekError = "";
+  try {
+    peekResult = await fetchPeekMessage(client, uid);
+  } catch (err) {
+    peekError = imapErrorDetail(err);
   }
   const tHead = Date.now();
 
-  const peek = (result.source as Buffer | undefined) ?? Buffer.alloc(0);
+  /*
+   * ── 받은 것이 **정말 원문인가** ──
+   *
+   * 앞에서는 이 자리가 한 줄이었다:
+   *
+   *     const peek = (result.source as Buffer | undefined) ?? Buffer.alloc(0);
+   *
+   * 그 `?? Buffer.alloc(0)` 이 **없는 것을 빈 것으로 바꿨고**, 바로 아래
+   * `peek.length < PEEK_BYTES` 가 빈 것을 **"다 받았다"** 로 읽었다. 그러면
+   * 0바이트가 mailparser 로 가고, 제목만 봉투에서 되물림된 채(그래서 화면은
+   * 멀쩡해 보인다) 보낸이도 본문도 없는 사본이 **캐시에 30일 앉는다.**
+   * 서버가 나아도 다시 묻지 않으니 그 메일은 영영 빈 채로 열린다.
+   *
+   * 잣대는 `fetchBodyParts` 가 조각에 두는 것과 **같아야 한다** — 그쪽은
+   * `!Buffer.isBuffer(v)` 로 이 함정을 이미 잡고 있었는데, 정작 맨 위
+   * `source` 에만 그 그물이 없었다.
+   *
+   *     받았다 ⟺ Buffer.isBuffer(source) && source.length > 0
+   *
+   * `length === 0` 까지 넣는 이유: 길이 0 리터럴은 지금은 값이 `undefined` 로
+   * 오지만, imapflow 가 언젠가 그것을 빈 버퍼로 넘겨도 같은 그물에 걸려야
+   * 한다. 진짜로 0바이트인 메일은 없다(RFC 상 헤더가 있어야 한다).
+   */
+  const rawPeek = peekResult ? peekResult.source : undefined;
+  const gotPeek = Buffer.isBuffer(rawPeek) && rawPeek.length > 0;
+
+  let result = peekResult;
+  let peek = gotPeek ? (rawPeek as Buffer) : Buffer.alloc(0);
   /*
    * 다 받았나. **서버가 우리가 청한 것보다 적게 줬으면 거기가 끝이다** —
    * 이것만 믿는다(위 fetch 의 RFC822.SIZE 주석 참고). 딱 128KB 짜리 메일은
    * 이 잣대로 한 번 더 물어보게 되는데, 그 한 왕복이 잘린 본문보다 싸다.
    */
-  const whole = peek.length < PEEK_BYTES;
+  let whole = peek.length < PEEK_BYTES;
+  /** 원문을 못 받아 통째로 다시 받았나. 로그에 그대로 남는다. */
+  let refetched = false;
+  /** 왜 물러났나 (로그용). 빈 글자면 첫 왕복이 멀쩡히 원문을 줬다는 뜻. */
+  let sourceFallback = "";
+
+  if (!gotPeek) {
+    /*
+     * **못 받았으면 옛 길로 한 번 물러난다.** 부분 지정도 조각 고르기도 없는
+     * 통짜 FETCH 다. 실측으로 세 갈래(서버가 NO 로 거절 / BODY[] 항목만 빠짐 /
+     * 빈 리터럴) **전부 이 한 왕복에서 살아났다.**
+     *
+     * 던지고 끝내지 않는 이유가 그것이다. 이 파일은 조각 길에 대해 이미 같은
+     * 결론을 내려 뒀다 — "빠르자고 만든 곁길이지 유일한 길이 아니다". 그
+     * 그물이 정작 `source` 자리에는 없었다.
+     */
+    /*
+     * 사연은 두 군데에 나눠 적는다. 짧은 갈래 이름은 아래 `본문 내역` 한 줄에
+     * (그래야 "물러나는 비율" 을 세기 쉽다), 서버가 한 말은 이 경고 줄에 —
+     * 200자짜리 문장을 두 줄에 겹쳐 적으면 로그가 안 읽힌다.
+     */
+    sourceFallback = peekError
+      ? "첫 왕복 거절"
+      : !peekResult
+        ? "첫 왕복 응답 없음"
+        : Buffer.isBuffer(rawPeek)
+          ? "첫 왕복이 빈 원문"
+          : "첫 왕복에 원문 항목 없음";
+    console.warn(
+      `[mail] 첫 왕복이 원문을 못 줬다 — 통째로 다시 받는다 ` +
+        `(uid=${uid}) ${sourceFallback}${peekError ? `: ${peekError}` : ""}`,
+    );
+    try {
+      result = await fetchWholeMessage(client, uid);
+    } catch (err) {
+      /*
+       * 서버가 한 말은 **로그에** 남기고, 사람에게는 짧은 우리말을 준다.
+       * 화면(본문 모달)은 `error` 를 그대로 띄우는데, 거기에 서버가 정한
+       * 영문 문장을 흘리면 사람에게는 아무 뜻이 없고 우리 로그에는 여전히
+       * 안 남는다. 남길 곳과 보일 곳은 다르다.
+       */
+      console.warn(
+        `[mail] 통째로 받기도 실패 (uid=${uid}) ${imapErrorDetail(err)}`,
+      );
+      // `cause` 로 매달아 둔다 — 부르는 쪽(수집기·라우트)의 한 줄에도 사연이
+      // 따라가야 로그 한 줄로 끝난다.
+      throw new Error("메일 서버가 본문을 주지 않았습니다", { cause: err });
+    }
+    refetched = true;
+    const rawAll = result ? result.source : undefined;
+    peek = Buffer.isBuffer(rawAll) ? rawAll : Buffer.alloc(0);
+    whole = true;
+  }
+
+  if (!result) {
+    throw new Error(`메시지를 찾을 수 없습니다 (UID ${uid})`);
+  }
+  /*
+   * 물러나고도 빈 것이면 **던진다. 빈 200 보다 500 이 낫다.**
+   *
+   * 사람은 "본문을 불러오지 못했습니다" 를 보면 다시 열어 본다 — 서버가
+   * 나으면 그때 열린다. 반면 빈 200 은 "이 메일에 원래 본문이 없구나" 로
+   * 읽히고, 캐시에 앉으면 다시 열어도 안 고쳐진다. 그리고 던지면 부르는 쪽
+   * 둘(라우트·수집기) 어디에도 담을 것이 생기지 않는다 — 그물을 여기 하나만
+   * 두면 되는 이유다.
+   */
+  if (!peek.length) {
+    console.warn(
+      `[mail] 물러나고도 원문이 비었다 (uid=${uid}) ${sourceFallback || "?"}`,
+    );
+    throw new Error("메일 서버가 본문을 주지 않았습니다");
+  }
 
   const structure = result.bodyStructure
     ? flattenStructure(result.bodyStructure)
@@ -957,11 +1210,12 @@ export async function fetchMessageWithLock(
    * 조각이 하나뿐인 메일이 바로 그 경우다 — 그 하나가 본문이므로 건너뛸
    * 것이 있을 수 없다.
    */
-  let fallback =
-    !whole &&
-    mode === "link" &&
-    structure.length > 1 &&
-    skippable >= MIN_SKIP_BYTES
+  let fallback = sourceFallback
+    ? sourceFallback
+    : !whole &&
+        mode === "link" &&
+        structure.length > 1 &&
+        skippable >= MIN_SKIP_BYTES
       ? plan.reason
       : "";
 
@@ -996,10 +1250,49 @@ export async function fetchMessageWithLock(
   }
 
   if (!body) {
-    const source = whole
-      ? peek
-      : Buffer.concat([peek, await fetchSourceFrom(client, uid, peek.length)]);
-    path = whole ? "whole" : "resumed";
+    let source = peek;
+    if (whole) {
+      path = refetched ? "refetch" : "whole";
+    } else {
+      /*
+       * ── 이어 받기가 던져도 물러난다 ──
+       *
+       * 이 둘째 왕복은 74dc938 이 **처음 만든** 명령이고, 그 명령이 서버에서
+       * 안 먹으면 그 메일은 다시 열어도 영영 안 열린다(실측: 1·2회차 모두
+       * 500). 문법은 위 `RESUME_CHUNK_BYTES` 에서 고쳤지만, 원인을 확정하지
+       * 못한 채 문법만 고치고 그물을 안 두면 **다음 고장에 또 같은 자리에서
+       * 멎는다.** 둘 다 한다.
+       *
+       * 물러나는 값은 앞 128KB 를 한 번 더 받는 것뿐이다. 실패한 통에서만
+       * 치르고, 성한 통은 지금과 똑같다.
+       */
+      try {
+        const more = await fetchSourceFrom(client, uid, peek.length);
+        source = more.length ? Buffer.concat([peek, more]) : peek;
+        path = "resumed";
+      } catch (err) {
+        console.warn(
+          `[mail] 이어 받기가 실패했다 — 통째로 다시 받는다 (uid=${uid}) ${imapErrorDetail(err)}`,
+        );
+        let again;
+        try {
+          again = await fetchWholeMessage(client, uid);
+        } catch (err2) {
+          console.warn(
+            `[mail] 통째로 받기도 실패 (uid=${uid}) ${imapErrorDetail(err2)}`,
+          );
+          throw new Error("메일 서버가 본문을 주지 않았습니다", { cause: err2 });
+        }
+        const rawAll = again ? again.source : undefined;
+        if (!Buffer.isBuffer(rawAll) || !rawAll.length) {
+          console.warn(`[mail] 통째로 받았는데도 원문이 비었다 (uid=${uid})`);
+          throw new Error("메일 서버가 본문을 주지 않았습니다", { cause: err });
+        }
+        source = rawAll;
+        path = "refetch";
+        fallback = fallback || "이어 받기 실패";
+      }
+    }
     bytes = source.length;
     tMore = Date.now();
     /*
@@ -1121,6 +1414,16 @@ export async function fetchMessageWithLock(
     timings.render = Date.now() - tParse;
     timings.bytes = bytes;
     timings.path = path;
+    timings.peek = peek.length;
+    /*
+     * **나온 물건도 적는다.** 빈 본문이 캐시에 앉는 순간을 말해 주는 줄이
+     * 지금까지 어디에도 없었다 — 수집기는 그것을 `담김 6` 이라고만 적었다.
+     * `html=0B text=0B` 를 **경보로 읽지 마라.** 파일만 보낸 메일이 늘 그렇게
+     * 찍힌다(성한 서버에서 실측). 이 줄이 뜻을 갖는 것은 **첨부가 없는데**
+     * **0/0 일 때**다. 그때만 본문이 사라진 것이다.
+     */
+    timings.htmlBytes = html ? Buffer.byteLength(html) : 0;
+    timings.textBytes = text ? Buffer.byteLength(text) : 0;
     timings.fallback = fallback;
   }
   return detail;
@@ -1306,10 +1609,14 @@ export const imapProvider: MailProvider = {
     const mode = options?.inlineImages ?? "link";
 
     const started = Date.now();
-    const { client, release } = await borrowImapConnection(account, folder, {
-      long: mode === "embed",
-      busyMessage: "메일 서버가 바빠 본문을 못 받았습니다",
-    });
+    const { client, release, marks } = await borrowImapConnection(
+      account,
+      folder,
+      {
+        long: mode === "embed",
+        busyMessage: "메일 서버가 바빠 본문을 못 받았습니다",
+      },
+    );
     const borrowed = Date.now() - started;
     const t: FetchMessageTimings = {
       head: 0,
@@ -1317,9 +1624,15 @@ export const imapProvider: MailProvider = {
       parse: 0,
       render: 0,
       bytes: 0,
-      path: "whole",
+      // "?" 로 시작한다 — 던지면 이 값이 그대로 찍힌다. 왜 그래야 하는지는
+      // FetchMessageTimings.path 주석에 적어 뒀다.
+      path: "?",
+      peek: -1,
+      htmlBytes: -1,
+      textBytes: -1,
       fallback: "",
     };
+    let failure = "";
     try {
       return await fetchMessageWithLock(
         client,
@@ -1327,18 +1640,38 @@ export const imapProvider: MailProvider = {
         { accountId: account.id, inlineImages: mode },
         t,
       );
+    } catch (err) {
+      /*
+       * **던진 것도 이 줄에 남긴다.** 앞에서는 `finally` 가 초기값을 찍어
+       * 실패가 `whole 0KB` 라는 **성공 모양**으로 나왔다. 운영에서 그 줄
+       * 열한 개를 놓고 다들 빈 원문을 의심했는데, 사실은 전부 던진 것이었다.
+       * 로그가 성공을 가장하면 안 된다.
+       */
+      failure = imapErrorDetail(err);
+      throw err;
     } finally {
       release();
       /*
        * 어디에 시간을 썼는지 남긴다. 라우트의 한 줄은 합계만 말해 주는데,
        * 그것만으로는 "연결을 여느라 느린가, 바이트가 많아 느린가" 를 가를 수
        * 없어 이번 작업이 시작됐다. 다음에는 로그가 먼저 말해 주게 한다.
+       *
+       * `conn` 은 **쪼개서** 적는다. 숫자 하나로는 두드림 시간 초과 · 자리
+       * 기다림(최대 15초) · 새 LOGIN 이 뭉개져, `conn=5491ms` 한 줄을 놓고
+       * 어느 것인지 가릴 수 없었다(B 절이 값 24개를 모아 중앙값을 내야 했던
+       * 이유다).
        */
       console.log(
         `[mail] 본문 내역 account=${account.id} uid=${uid} ` +
-          `conn=${borrowed}ms head=${t.head}ms more=${t.more}ms ` +
+          `conn=${borrowed}ms(wait=${marks.wait} probe=${marks.probe} ` +
+          `open=${marks.open} lock=${marks.lock}) ` +
+          `head=${t.head}ms more=${t.more}ms ` +
           `parse=${t.parse}ms render=${t.render}ms ` +
-          `${t.path} ${Math.round(t.bytes / 1024)}KB` +
+          (failure
+            ? `실패 ${failure}`
+            : `${t.path} ${Math.round(t.bytes / 1024)}KB ` +
+              `peek=${t.peek}/${PEEK_BYTES} ` +
+              `html=${t.htmlBytes}B text=${t.textBytes}B`) +
           (t.fallback ? ` (물러남: ${t.fallback})` : ""),
       );
     }

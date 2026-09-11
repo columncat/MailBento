@@ -22,8 +22,17 @@ export interface ImapConnectOptions {
   pass: string;
 }
 
-export function makeImapClient(opts: ImapConnectOptions): ImapFlow {
+/**
+ * @param extra 풀이 얹는 것 — 지금은 `disableAutoIdle` 하나다.
+ *   왜 인자로 받는가: 풀에 든 연결과 한 번 쓰고 버리는 연결은 노는 방식이
+ *   다르다. 자세한 사연은 `imap-pool.ts` 의 `open()` 에 적어 뒀다.
+ */
+export function makeImapClient(
+  opts: ImapConnectOptions,
+  extra?: { disableAutoIdle?: boolean },
+): ImapFlow {
   return new ImapFlow({
+    ...extra,
     host: opts.host,
     port: opts.port,
     secure: opts.port === 993,

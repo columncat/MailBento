@@ -2,6 +2,7 @@ import type { ImapFlow } from "imapflow";
 
 import type { Account } from "./db/schema";
 import { basicCredsFromAccount, makeImapClient } from "./imap-client";
+import { imapErrorDetail } from "./imap-error";
 
 /**
  * ── 연결을 다시 쓰되, 하나로 묶지는 않는다 ──
@@ -92,13 +93,23 @@ const PROBE_AFTER_IDLE_MS = 1_000;
 /**
  * 두드림에 줄 시간. 넘으면 죽은 것으로 본다.
  *
- * 짧게 잡고 싶은 마음이 들지만 — 사람이 기다리는 시간이 곧 이 값이다 —
- * **잘못 버리면 LOGIN 이 한 번 는다.** 이 파일이 통째로 막으려는 것이 바로
- * 로그인 폭증이고, Gmail 은 로그인도 조인다. 서버가 잠깐 바쁜 것을 죽었다고
- * 오해해 로그인을 퍼붓는 것보다, 드문 고장에서 5초를 쓰는 편이 낫다.
- * (그래도 socketTimeout(30초)보다는 확실히 짧다 — 그게 이 값의 존재 이유다.)
+ * **5,000 이었다. 그 값이 흔한 길에서 매번 다 쓰였다.**
+ *
+ * 사연: 이 값을 5초로 잡을 때는 "드문 고장에서만 치르는 값" 이라고 봤다.
+ * 그런데 아래 `open()` 이 적어 둔 대로, 풀에 15초 넘게 놀던 연결은 imapflow
+ * 가 스스로 IDLE 에 들어간다. 그 상태에서 `noop()` 은 곧장 나가지 못하고
+ * IDLE 을 깨는 절차 뒤에 줄을 서는데, 서버가 그 절차를 제때 안 끝내면
+ * **NOOP 은 소켓에 한 글자도 안 나간 채** 이 상한이 다할 때까지 매달린다.
+ * 사람이 메일 한 통 읽고 다음 통을 여는 리듬(15~30초)이 정확히 그 창이라,
+ * 운영에서 열기마다 5초가 갔다(실측 중앙값 5,346ms).
+ *
+ * `disableAutoIdle` 로 그 창을 없앴으니 이제 두드림은 **왕복 하나**다. 왕복
+ * 200ms 짜리 먼 서버라도 200~400ms 면 답이 온다. 1,500 은 그 네 배 위라
+ * "잠깐 바쁜 서버를 죽었다고 오해" 할 여유가 넉넉하면서, 최악이 5초에서
+ * 1.5초로 준다. (그래도 socketTimeout(30초)보다는 확실히 짧다 — 그게 이
+ * 값의 존재 이유다.)
  */
-const PROBE_TIMEOUT_MS = 5_000;
+const PROBE_TIMEOUT_MS = 1_500;
 
 export class PartError extends Error {
   constructor(
@@ -156,6 +167,12 @@ function poolKey(account: Account, folder: string): string {
     account.imapUsername,
     folder,
   ].join(" ");
+}
+
+/** 로그에 쓸 짧은 이름. **자격 증명은 빼고** 계정과 폴더만. */
+function keyLabel(key: string): string {
+  const p = key.split(" ");
+  return `account=${p[0]} folder=${p[4] ?? "?"}`;
 }
 
 function slotOf(key: string): Slot {
@@ -256,7 +273,36 @@ function wake(key: string, give?: Pooled): boolean {
 }
 
 async function open(account: Account, key: string): Promise<Pooled> {
-  const client = makeImapClient(basicCredsFromAccount(account));
+  /*
+   * ── 풀에 든 연결에는 **자동 IDLE 을 끈다** ──
+   *
+   * imapflow 는 SELECTED 상태에서 15초를 놀면 스스로 `IDLE` 에 들어간다
+   * (`imap-flow.js` 의 `autoidle()`). 그리고 한 번에 명령 하나만 와이어에
+   * 올리므로, IDLE 중에 `noop()` 을 부르면 그 NOOP 은 **IDLE 을 깨는 절차
+   * 뒤에 줄을 선다.** 그 절차는 서버가 `+` 를 줘야(또는 DONE 뒤 tagged OK 를
+   * 줘야) 끝나는데, 안 주면 imapflow 안에는 상한이 없어 **NOOP 이 소켓에 한
+   * 글자도 안 나간 채 매달린다.** 우리 `withTimeout` 이 유일한 마개다.
+   * 실측(흉내 서버, RTT 50ms): 20초 논 뒤 열기 **5,564ms** — 운영 로그의
+   * 중앙값 5,346ms 와 같은 서명이다. 3초만 논 연결은 127ms 였다.
+   *
+   * **이 고장은 앞 판 시험대가 못 잡았다.** 흉내 서버가 CAPABILITY 에 IDLE 을
+   * 올려만 놓고 명령은 `BAD` 로 답해, autoidle 이 곧장 catch 로 떨어졌다.
+   * 그래서 IDLE·DONE 길이 시험에서 **한 번도 안 돌았다.** (지금 시험대는
+   * IDLE 을 제대로 받는다.)
+   *
+   * 끄면 무엇을 잃나 — **아무것도.** 우리는 IDLE 로 새 메일을 기다리지 않는다
+   * (수집은 10분 타이머고 `exists`/`expunge` 를 듣는 곳이 없다). NAT 유지나
+   * 서버의 유휴 연결 끊기도 상관없다 — 풀에 머무는 시간이 30초뿐이다.
+   * 잃는 것 하나는 `socketTimeout` 이 IDLE 중인 연결을 되살리는 길인데,
+   * 그 길은 되살리려고 부르는 NOOP 이 바로 위와 같은 자리에 걸려 **원래부터
+   * 안 되는 길**이다(실측: 18분 뒤에도 매달려 있었다).
+   *
+   * 한 번 쓰고 버리는 연결(`withImapConnection`)은 15초를 놀 일이 없어
+   * 이 손잡이가 필요 없다. 그래서 풀에서만 켠다.
+   */
+  const client = makeImapClient(basicCredsFromAccount(account), {
+    disableAutoIdle: true,
+  });
   /*
    * 상대가 먼저 끊는 일은 늘 있다(유휴 정리·서버 재시작). 그때 풀에 시체가
    * 남아 있으면 다음 요청이 그걸 빌려 갔다가 실패한다. 끊기는 즉시 들어낸다.
@@ -279,7 +325,10 @@ async function open(account: Account, key: string): Promise<Pooled> {
 /** 약속에 시간 상한을 씌운다. 늦으면 던진다. */
 function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
   return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error("probe timeout")), ms);
+    const timer = setTimeout(
+      () => reject(new Error(`두드림이 ${ms}ms 안에 안 끝났다`)),
+      ms,
+    );
     timer.unref?.();
     /*
      * `then` 의 두 자리를 다 채운다. 시간이 다한 뒤 늦게 오는 거절도 여기서
@@ -307,11 +356,12 @@ function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
  */
 async function probe(key: string, e: Pooled): Promise<boolean> {
   if (Date.now() - e.lastOkAt < PROBE_AFTER_IDLE_MS) return true;
+  const t0 = Date.now();
   try {
     await withTimeout(e.client.noop(), PROBE_TIMEOUT_MS);
     e.lastOkAt = Date.now();
     return true;
-  } catch {
+  } catch (err) {
     e.busy = false;
     e.long = false;
     kill(key, e);
@@ -336,13 +386,26 @@ async function probe(key: string, e: Pooled): Promise<boolean> {
      * 어차피 다음에 빌려 갈 때 두드려 버려질 것들을 미리 버리는 셈이다.
      */
     const s = pool.get(key);
+    let siblings = 0;
     if (s) {
       for (const other of [...s.entries]) {
         if (other.busy) continue;
         if (Date.now() - other.lastOkAt < PROBE_AFTER_IDLE_MS) continue;
         kill(key, other);
+        siblings++;
       }
     }
+    /*
+     * **한 줄이라도 남긴다.** 앞에서는 이 catch 가 오류를 안 받고 아무것도 안
+     * 찍었다. 연결 하나를 끊고 놀던 형제들까지 버리는 일인데 흔적이 없었고,
+     * 그래서 "열기마다 5초" 라는 고장이 로그에서 안 보였다 — 다음 사람이
+     * `conn=` 값 24개를 모아 중앙값을 내야 겨우 짚이는 고장이 됐다.
+     */
+    console.warn(
+      `[pool] 두드림 실패 ${Date.now() - t0}ms — 이 연결과 놀던 ${siblings}개를 버린다 ` +
+        // 키를 통째로 찍지 않는다 — 안에 IMAP 사용자 이름이 들어 있다.
+        `(${keyLabel(key)}) ${imapErrorDetail(err)}`,
+    );
     return false;
   }
 }
@@ -382,16 +445,30 @@ async function take(
   key: string,
   long: boolean,
   busyMessage: string,
+  marks: BorrowMarks,
 ): Promise<Pooled> {
   const deadline = Date.now() + BORROW_TIMEOUT_MS;
   for (;;) {
     const s = slotOf(key);
     if (mayTake(s, long)) {
-      const free = s.entries.find((e) => !e.busy && e.client.usable);
+      /*
+       * **가장 최근에 반납된 것부터** 고른다. 앞에서는 `find` 라 배열 맨 앞,
+       * 곧 **가장 오래 논 것**을 골랐다 — 두드림에 가장 잘 걸리는 쪽이다.
+       * 방금 답한 연결을 먼저 쓰면 `PROBE_AFTER_IDLE_MS` 안에 들어 두드림을
+       * 통째로 건너뛴다. 공짜로 왕복 하나가 준다.
+       */
+      let free: Pooled | undefined;
+      for (const e of s.entries) {
+        if (e.busy || !e.client.usable) continue;
+        if (!free || e.lastOkAt > free.lastOkAt) free = e;
+      }
       if (free) {
         const held = hold(free, long);
+        const p0 = Date.now();
         // 살아 있으면 그대로 쓴다. 아니면 방금 끊었으니 위에서 다시 본다.
-        if (await probe(key, held)) return held;
+        const alive = await probe(key, held);
+        marks.probe += Date.now() - p0;
+        if (alive) return held;
         continue;
       }
       if (s.entries.length + s.opening < MAX_POOL_PER_KEY) {
@@ -404,8 +481,10 @@ async function take(
         // 오래 걸리는 일의 몫은 **여기서** 잡는다. `await` 뒤로 미루면 같은
         // tick 에 들어온 다음 요청이 이 자리를 못 보고 그냥 지나간다.
         if (long) s.openingLong++;
+        const o0 = Date.now();
         try {
           const e = await open(account, key);
+          marks.open += Date.now() - o0;
           s.entries.push(e);
           // hold() 가 먼저 돌고 finally 가 뒤에 돈다 — 셈이 끊기지 않는다
           return hold(e, long);
@@ -416,7 +495,9 @@ async function take(
         }
       }
     }
+    const w0 = Date.now();
     const given = await waitForSlot(key, long, deadline, busyMessage);
+    marks.wait += Date.now() - w0;
     if (given) return given; // 넘겨받았다 (이미 잡힌 상태)
     // null 이면 "자리가 났다" 는 뜻 — 위에서 다시 본다
   }
@@ -451,6 +532,25 @@ function giveBack(key: string, e: Pooled): void {
   }
 }
 
+/**
+ * 연결 하나를 빌리는 데 **어디에** 시간이 갔나. 부르는 쪽이 로그에 쪼개 적는다.
+ *
+ * 왜 필요한가 — 앞에서는 본문 로그의 `conn=5491ms` 가 숫자 하나였고, 그 안에
+ * 자리 기다림(최대 15초) · 두드림(최대 상한) · 새 LOGIN · SELECT 가 전부
+ * 뭉개져 있었다. 그래서 "열기마다 5초" 를 짚는 데 값 24개와 중앙값이 필요했다.
+ * 다음에는 한 줄로 끝나야 한다.
+ */
+export interface BorrowMarks {
+  /** 자리가 나기를 기다린 시간. */
+  wait: number;
+  /** 놀던 연결을 두드리는 데 쓴 시간(실패해 버린 것까지 합친다). */
+  probe: number;
+  /** 새로 연 시간 (TCP+TLS+LOGIN…). 다시 쓴 연결이면 0. */
+  open: number;
+  /** `getMailboxLock` — 찬 연결이면 LIST+SELECT 가 여기 든다. */
+  lock: number;
+}
+
 export interface BorrowOptions {
   /**
    * **연결을 오래 쥘 일인가.** 첨부 스트림이 그렇다 — 함수가 돌아온 뒤에도
@@ -477,10 +577,11 @@ export async function borrowImapConnection(
   account: Account,
   folder: string,
   opts: BorrowOptions,
-): Promise<{ client: ImapFlow; release: () => void }> {
+): Promise<{ client: ImapFlow; release: () => void; marks: BorrowMarks }> {
   const key = poolKey(account, folder);
   const long = opts.long;
   const busyMessage = opts.busyMessage ?? BUSY_MESSAGE;
+  const marks: BorrowMarks = { wait: 0, probe: 0, open: 0, lock: 0 };
 
   /*
    * 두 번까지 해 본다. 빌린 연결이 **빌리는 사이에** 죽는 일이 있다 —
@@ -488,9 +589,10 @@ export async function borrowImapConnection(
    * 요청을 실패로 돌리면 사람 화면에는 이유 없는 "이미지 없음" 이 남는다.
    */
   for (let attempt = 0; ; attempt++) {
-    const held = await take(account, key, long, busyMessage);
+    const held = await take(account, key, long, busyMessage, marks);
 
     let lock;
+    const l0 = Date.now();
     try {
       /*
        * 이제 한 연결에는 한 요청만 타므로 이 잠금은 다투지 않는다. 그래도
@@ -499,7 +601,9 @@ export async function borrowImapConnection(
        * 데워진 연결에서 이 줄이 왕복을 한 번도 안 쓰는 이유다.)
        */
       lock = await held.client.getMailboxLock(folder);
+      marks.lock += Date.now() - l0;
     } catch (e) {
+      marks.lock += Date.now() - l0;
       /*
        * **`giveBack` 을 부르면 안 된다.** 그것은 이 연결을 기다리는 쪽에
        * 곧장 넘겨 주는데, 바로 다음 줄에서 우리가 그 연결을 로그아웃시킨다 —
@@ -516,6 +620,7 @@ export async function borrowImapConnection(
     let done = false;
     return {
       client: held.client,
+      marks,
       release: () => {
         if (done) return;
         done = true;

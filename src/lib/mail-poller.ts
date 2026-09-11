@@ -2,6 +2,7 @@ import { and, eq, inArray } from "drizzle-orm";
 
 import { db, schema } from "./db";
 import type { Account } from "./db/schema";
+import { imapErrorDetail } from "./imap-error";
 import { fetchAllInboxes } from "./mail-fetch";
 import { clipSubject, detectInjection, maskEmail } from "./injection";
 import { refreshMailCache } from "./mail-cache";
@@ -359,9 +360,16 @@ async function prefetchBodies(fresh: NewMail[]): Promise<void> {
        * 한 통의 실패는 그 통만 건너뛴다. 사람이 열 때 받으면 그만이고, 그
        * 길은 이 기능이 있기 전과 똑같이 동작한다.
        */
+      /*
+       * **서버가 실제로 한 말을 적는다.** 앞에서는 `e.message` 뿐이었는데,
+       * imapflow 는 태그 붙은 NO/BAD 마다 `Command failed` 라는 **같은 상수
+       * 문자열**을 던진다. 운영에서 이 줄이 넷 나왔지만 전부 그 한 문장이라
+       * 원인이 서버 쪽인지 우리가 보낸 명령의 모양인지 가릴 수 없었고,
+       * 그것을 가리는 데 19시간이 갔다.
+       */
       console.warn(
         `[poll] 미리 받기 실패 account=${m.accountId} uid=${m.messageId}: ` +
-          (e instanceof Error ? e.message : e),
+          imapErrorDetail(e),
       );
       if (streak >= PREFETCH_FAIL_STREAK) {
         console.warn(
