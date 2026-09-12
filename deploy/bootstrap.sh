@@ -167,6 +167,88 @@ if [ ! -f "$ASR_DIR/tokens.txt" ]; then
   fi
 fi
 
+# ── 화자 분리 모델 ──
+#
+# 분할 6.0MB + 임베딩 28.3MB = **34.3MB.** 전사 모델의 5%도 안 되지만 여기서
+# 받는 이유는 같다 — 볼륨에 두고 이미지를 안 불린다.
+#
+# **여기서 실패해도 스택을 세우지 않는다.** 위의 전사 모델과 같은 규율이고,
+# 이쪽은 한 걸음 더 가볍다: 분리 모델이 없으면 **화자 구분만** 안 되고 전사는
+# 그대로 된다. 전사문이 화자 분리보다 먼저다.
+#
+# **파일 이름과 해시는 VoiceBento 의 `scripts/diar-models.json` 이 정본이다.**
+# 여기 적힌 것은 그 표를 손으로 옮긴 사본이라, 그쪽을 고치는 날 이 블록도 함께
+# 고쳐야 한다. 어긋나면 앱이 "모델 파일이 없습니다" 로 분리만 건너뛴다 —
+# 조용하지만 화면에 그 문장이 뜨므로 찾을 수는 있다.
+# (전사 모델도 같은 방식으로 묶여 있다. 위 `ASR_DIR` 을 보라.)
+DIAR_SEG="$MODELS_DIR/pyannote-segmentation-3-0.onnx"
+DIAR_SEG_URL="https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-segmentation-models/sherpa-onnx-pyannote-segmentation-3-0.tar.bz2"
+DIAR_SEG_TAR_SHA="24615ee884c897d9d2ba09bb4d30da6bb1b15e685065962db5b02e76e4996488"
+DIAR_SEG_SHA="220ad67ca923bef2fa91f2390c786097bf305bceb5e261d4af67b38e938e1079"
+DIAR_SEG_MEMBER="sherpa-onnx-pyannote-segmentation-3-0/model.onnx"
+DIAR_EMB="$MODELS_DIR/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx"
+# 태그 이름의 `recongition` 은 오타가 아니라 **실제 철자**다. 고치면 404 다.
+DIAR_EMB_URL="https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx"
+DIAR_EMB_SHA="aa3cfc16963a10586a9393f5035d6d6b57e98d358b347f80c2a30bf4f00ceba2"
+
+# **함수로 감싸 `||` 뒤에서 부른다.** 이 스크립트는 `set -euo pipefail` 이다.
+# `if` 로 감싼 명령은 그 규율을 피하지만 `got="$(sha_of …)"` 같은 대입과 `mv`
+# 는 피하지 못한다 — 디스크가 차 `mv` 하나가 실패하면 34MB 짜리 곁가지 때문에
+# 메일함·메모함·논문함까지 안 뜬다. bash 는 `||` 의 왼쪽에서 도는 함수 안에서
+# `set -e` 를 끄므로, 이 블록 안의 어떤 실패도 스택을 세우지 않는다.
+fetch_diar_models() {
+  if [ ! -f "$DIAR_SEG" ]; then
+    echo "── 화자 분리 모델(분할) 받기 (6.6MB)"
+    DIAR_TAR="$MODELS_DIR/.pyannote.tar.bz2"
+    DIAR_TMP="$MODELS_DIR/.pyannote.tmp"
+    rm -rf "$DIAR_TMP"
+    if curl -fL --retry 3 -o "$DIAR_TAR" "$DIAR_SEG_URL"; then
+      got="$(sha_of "$DIAR_TAR")"
+      if [ -n "$got" ] && [ "$got" != "$DIAR_SEG_TAR_SHA" ]; then
+        echo "  받은 것이 어긋납니다 ($got). 버립니다." >&2
+        rm -f "$DIAR_TAR"
+      # 묶음에서 **쓰는 멤버 하나만** 꺼낸다. int8 판본과 파이썬 예제는 안 쓴다.
+      elif mkdir -p "$DIAR_TMP" && tar -xjf "$DIAR_TAR" -C "$DIAR_TMP" "$DIAR_SEG_MEMBER"; then
+        # 묶음 해시는 받은 바이트가 온전한지만 말한다. tar 이 무엇을 꺼냈는지는
+        # 말하지 않으므로 **꺼낸 파일도 다시 본다.**
+        got="$(sha_of "$DIAR_TMP/$DIAR_SEG_MEMBER")"
+        if [ -n "$got" ] && [ "$got" != "$DIAR_SEG_SHA" ]; then
+          echo "  묶음에서 꺼낸 것이 어긋납니다 ($got). 버립니다." >&2
+        else
+          mv -f "$DIAR_TMP/$DIAR_SEG_MEMBER" "$DIAR_SEG"
+        fi
+      else
+        echo "  푸는 데 실패했습니다 (bzip2 가 없을 수 있습니다). 화자 구분만 안 됩니다." >&2
+      fi
+      rm -rf "$DIAR_TAR" "$DIAR_TMP"
+    else
+      echo "  분할 모델을 받지 못했습니다. 화자 구분만 안 됩니다 — 나중에 다시 실행하세요." >&2
+      rm -f "$DIAR_TAR"
+    fi
+  fi
+
+  if [ ! -f "$DIAR_EMB" ]; then
+    echo "── 화자 분리 모델(임베딩) 받기 (28.3MB)"
+    if curl -fL --retry 3 -o "$DIAR_EMB.part" "$DIAR_EMB_URL"; then
+      got="$(sha_of "$DIAR_EMB.part")"
+      if [ -n "$got" ] && [ "$got" != "$DIAR_EMB_SHA" ]; then
+        echo "  받은 것이 어긋납니다 ($got). 버립니다." >&2
+        rm -f "$DIAR_EMB.part"
+      else
+        mv -f "$DIAR_EMB.part" "$DIAR_EMB"
+      fi
+    else
+      echo "  임베딩 모델을 받지 못했습니다. 화자 구분만 안 됩니다 — 나중에 다시 실행하세요." >&2
+      rm -f "$DIAR_EMB.part"
+    fi
+  fi
+
+  # 둘 다 앉았는지로 끝을 말한다. 한쪽만 있으면 앱은 분리를 건너뛴다.
+  [ -f "$DIAR_SEG" ] && [ -f "$DIAR_EMB" ]
+}
+
+fetch_diar_models || echo "  화자 분리 모델이 다 갖춰지지 않았습니다. 전사는 그대로 되고 화자 구분만 안 됩니다." >&2
+
 # 모델 볼륨은 읽기 전용으로 물린다. 안에서 chown 할 수 없으니 여기서 열어 둔다
 # (앱은 uid 1001 로 돌고 이 폴더는 이 계정이 만들었다).
 chmod -R a+rX "$MODELS_DIR" 2>/dev/null || true
