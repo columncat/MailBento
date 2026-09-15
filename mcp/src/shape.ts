@@ -141,9 +141,8 @@ export function shapeDetail(d: MailMessageDetail, bodyLimit: number) {
     unread: d.unread,
     mark: d.mark ?? null,
     // 본문은 감추지 않는다. 사용자가 버튼으로 허락하고 읽는 자리이고, 감추면
-    // 읽는 의미가 없다. 대신 주입 흔적이 있으면 그 사실을 함께 알린다.
+    // 읽는 의미가 없다.
     body: clip(body, bodyLimit),
-    injectionSuspected: body ? detectInjection([{ field: "본문", value: body }])?.marker ?? null : null,
     bodyFormat: d.text && d.text.trim() ? "text" : d.html ? "html→text" : "none",
   });
 }
