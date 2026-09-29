@@ -1,4 +1,4 @@
-import { Readable } from "node:stream";
+import { Readable, Transform } from "node:stream";
 
 import { eq } from "drizzle-orm";
 import type { ImapFlow } from "imapflow";
@@ -7,7 +7,7 @@ import { simpleParser } from "mailparser";
 import { db, schema } from "./db";
 import type { Account } from "./db/schema";
 import { borrowImapConnection, PartError } from "./imap-pool";
-import { parseImapView } from "./providers/imap";
+import { parseImapView, partDecodedSize } from "./providers/imap";
 
 /*
  * 연결 풀은 **여기 있었다.** 본문 열기도 같은 풀을 타야 해서 `imap-pool.ts`
@@ -234,30 +234,61 @@ export async function streamMessagePart(
     }
     if (!PART_ID.test(id)) throw new PartError("조각 번호가 이상합니다", 400);
 
-    const dl = await client.download(String(uid), id, {
-      uid: true,
-      maxBytes: MAX_ATTACHMENT_TRANSFER_BYTES,
-    });
-    if (!dl?.content) throw new PartError("그 조각을 찾을 수 없습니다", 404);
-
-    // 시작하기 전에 거절한다. 흘려보내다 끊으면 사람 손에는 **잘린 파일**이
-    // 남고, 파일이 깨진 것인지 우리가 끊은 것인지 구분할 길이 없다.
-    if ((dl.meta?.expectedSize ?? 0) > MAX_ATTACHMENT_TRANSFER_BYTES) {
-      dl.content.destroy();
+    /*
+     * **시작하기 전에 거절한다.** 흘려보내다 끊으면 사람 손에는 잘린 파일이 남고,
+     * 파일이 깨진 것인지 우리가 끊은 것인지 구분할 길이 없다.
+     *
+     * 재는 값은 **그 조각의 크기**다. 예전에는 `download()` 가 주는
+     * `meta.expectedSize` 를 봤는데 그것은 메일 전체 크기라, 41.1MB 메일 안의
+     * 20MB 첨부 둘이 상한의 절반인데도 둘 다 413 이 됐다(실측).
+     */
+    const want = await partDecodedSize(client, uid, id);
+    if (want !== null && want > MAX_ATTACHMENT_TRANSFER_BYTES) {
       throw new PartError("첨부가 너무 큽니다", 413);
     }
 
+    /*
+     * `maxBytes` 를 주지 않는다. 그 손잡이는 상한에서 **말없이 자른다** —
+     * imapflow 의 `LimitedPassthrough` 가 넘치는 덩이를 오류 없이 버리므로
+     * (`limited-passthrough.js`: "all subsequent chunks are dropped without error")
+     * 사람에게는 **온전해 보이는 잘린 파일**이 간다. 예전 문지기는 크기를 모를 때
+     * `?? 0` 으로 문을 열어 두어 바로 이 길로 빠졌다.
+     *
+     * 대신 우리가 세다가 넘으면 끊는다. 내려받기가 실패로 보이는 편이 잘린 파일이
+     * 성공으로 보이는 것보다 낫다. 크기를 아는 첨부는 위에서 이미 걸러졌으므로
+     * 여기까지 오는 것은 서버가 구조나 크기를 안 준 드문 경우다.
+     */
+    const dl = await client.download(String(uid), id, { uid: true });
+    if (!dl?.content) throw new PartError("그 조각을 찾을 수 없습니다", 404);
+
     const node = dl.content;
+    let sent = 0;
+    const cap = new Transform({
+      transform(chunk: Buffer, _enc, cb) {
+        sent += chunk.length;
+        if (sent > MAX_ATTACHMENT_TRANSFER_BYTES) {
+          cb(
+            new PartError(
+              `첨부가 상한(${MAX_ATTACHMENT_TRANSFER_BYTES} 바이트)을 넘어 끊었습니다`,
+              413,
+            ),
+          );
+          return;
+        }
+        cb(null, chunk);
+      },
+    });
     const timer = setTimeout(() => node.destroy(), PART_TIMEOUT_MS);
     const finish = () => {
       clearTimeout(timer);
       release();
     };
-    node.once("close", finish);
-    node.once("error", finish);
+    cap.once("close", finish);
+    cap.once("error", () => node.destroy());
+    node.once("error", (e) => cap.destroy(e));
 
     return {
-      stream: Readable.toWeb(node) as ReadableStream<Uint8Array>,
+      stream: Readable.toWeb(node.pipe(cap)) as ReadableStream<Uint8Array>,
       declaredType: dl.meta?.contentType ?? null,
       filename: dl.meta?.filename ?? null,
     };

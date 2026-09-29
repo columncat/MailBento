@@ -165,12 +165,31 @@ export async function fetchInboxFromClient(
 
     if (criteria) {
       const uids = await client.search(criteria, { uid: true });
-      if (!uids || uids.length === 0) return [];
+      /*
+       * **거절과 "0건" 을 가른다.**
+       *
+       * imapflow 는 서버가 SEARCH 를 NO/BAD 로 거절하면 오류를 삼키고 `false` 를
+       * 돌려준다 (`commands/search.js` 끝의 catch → `return false`). 예전에는 그것을
+       * `!uids` 로 받아 `return []` 했다 — 거절이 "맞는 메일이 없다" 로 바뀌었다.
+       * 그러면 화면에 **빈 메일함**이 오류 표시도 없이 뜨고, 직전에 성공한 목록을
+       * 지켜 주는 `mergeKeepingLastGood` 도 `error` 가 비어 있어 비껴간다. 새 메일
+       * 판정(`detectNew`)은 볼 것이 없어 조용히 멎는다. 실측으로 재현했다(15통 → 0통).
+       *
+       * 그래서 던진다. 위쪽 `fetchInboxesGrouped` 의 catch 가 `error` 를 채우면
+       * 직전 목록이 살아남고 화면이 "마지막으로 가져온 내용" 이라고 말한다.
+       */
+      if (!uids) throw new Error("메일 서버가 검색(SEARCH)을 거절했습니다");
+      if (uids.length === 0) return [];
       source = uids.slice(-limit).join(","); // 최신(높은 UID) limit개
       byUid = true;
     } else {
       const status = await client.status(folder, { messages: true });
-      const total = status.messages ?? 0;
+      // STATUS 도 같다 — 거절하면 `false` 가 오고, `?? 0` 이 그것을 "0통" 으로
+      // 바꿨다. 통수를 못 받은 것과 정말 0통인 것은 다른 일이다.
+      if (!status || typeof status.messages !== "number") {
+        throw new Error("메일 서버가 메일함 크기(STATUS)를 알려주지 않았습니다");
+      }
+      const total = status.messages;
       if (total === 0) return [];
       const from = Math.max(1, total - limit + 1);
       source = `${from}:${total}`;
@@ -211,7 +230,13 @@ export async function fetchUnreadCountFromClient(
   // 검색 필터가 있으면 정확한 미읽음 수를 status 로 못 구함 → null (가져온 메시지에서 계산)
   if (criteria) return null;
   const status = await client.status(folder, { unseen: true });
-  return status.unseen ?? null;
+  /*
+   * 타입은 객체라고 말하지만 imapflow 는 거절을 삼키고 `false` 를 준다(위 SEARCH
+   * 문단 참고). 여기서는 그것이 `null`("모름")이 되어 화면이 개수를 감추므로
+   * 고장은 아니다 — 다만 타입이 거짓말을 하니 분명히 적어 둔다. 0 으로 바꾸지 마라.
+   */
+  if (!status || typeof status.unseen !== "number") return null;
+  return status.unseen;
 }
 
 function parsedAddrToMailAddr(
@@ -1427,6 +1452,34 @@ export async function fetchMessageWithLock(
     timings.fallback = fallback;
   }
   return detail;
+}
+
+/**
+ * 조각 하나의 **디코딩 뒤 크기**. 구조를 못 받았거나 서버가 크기를 안 주면 null.
+ *
+ * 첨부 문지기(`mail-part.ts`)가 쓴다. 예전에는 거기서 `download()` 가 준
+ * `meta.expectedSize` 로 판단했는데 그 값은 **메일 전체 크기(RFC822.SIZE)** 다 —
+ * 실측: 41.1MB 메일 안의 20MB 첨부 둘이 40MB 상한에 둘 다 걸려 413 이 됐다.
+ *
+ * 구조 걷기(`flattenStructure`)와 인코딩 환산(`decodedSize`)이 이 모듈에만 있으므로
+ * 여기서 내준다. 단일 파트 메일의 번호가 "1" 이라는 규칙도 한 곳에만 남는다.
+ */
+export async function partDecodedSize(
+  client: ImapFlow,
+  uid: number,
+  id: string,
+): Promise<number | null> {
+  const res = await client.fetchOne(
+    String(uid),
+    { bodyStructure: true },
+    { uid: true },
+  );
+  if (!res || !res.bodyStructure) return null;
+  const want = id.toLowerCase();
+  const node = flattenStructure(res.bodyStructure).find(
+    (p) => p.part.toLowerCase() === want,
+  );
+  return node ? decodedSize(node) : null;
 }
 
 /**
