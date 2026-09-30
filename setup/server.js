@@ -189,7 +189,7 @@ const HTML = String.raw`<!doctype html>
 
   <div class="done" id="done">
     <h2>설정을 저장했습니다</h2>
-    <p class="lede">다섯 서비스가 차례로 올라옵니다. 10초쯤 뒤 이 페이지가 알아서 메일함으로 넘어갑니다.</p>
+    <p class="lede">여섯 서비스가 차례로 올라옵니다. 10초쯤 뒤 이 페이지가 알아서 메일함으로 넘어갑니다.</p>
   </div>
 </main>
 
@@ -287,6 +287,11 @@ function save(input) {
   const memobentoUrl = pick(input.memobentoUrl);
   const paperbentoUrl = pick(input.paperbentoUrl);
   const voicebentoUrl = pick(input.voicebentoUrl);
+  /*
+   * 장부함 주소를 묻는 칸은 두지 않았다. 형제 앱들의 머리글에 장부함으로
+   * 건너가는 버튼이 아직 없어서, 물어 봐야 아무 데도 안 쓰인다. 버튼을
+   * 놓는 날 이 칸과 각 앱의 LEDGERBENTO_URL 을 함께 넣으면 된다.
+   */
   const maxUploadMb = pick(input.maxUploadMb) || "5120";
 
   const shared = {
@@ -374,6 +379,21 @@ function save(input) {
     { mode: 0o600 },
   );
 
+  /*
+   * 장부함. 가장 단출하다 — 남의 DB 도, 올리는 파일도, 모델도 없다.
+   * 건너가는 버튼 주소와 기본 통화뿐이다.
+   */
+  writeFileSync(
+    join(CONFIG_DIR, "ledgerbento.env"),
+    envFile({
+      ...shared,
+      MAILBENTO_URL: mailbentoUrl,
+      MEMOBENTO_URL: memobentoUrl,
+      DEFAULT_CURRENCY: "KRW",
+    }),
+    { mode: 0o600 },
+  );
+
   writeFileSync(
     join(CONFIG_DIR, "bentoagent.env"),
     envFile({
@@ -397,6 +417,8 @@ function save(input) {
       // 에이전트가 전사문을 되짚어 볼 일이 생기면 그때 이 값이 쓰인다.
       VOICEBENTO_URL: "http://voicebento:3000",
       VOICEBENTO_PASSWORD: password,
+      LEDGERBENTO_URL: "http://ledgerbento:3000",
+      LEDGERBENTO_PASSWORD: password,
     }),
     { mode: 0o600 },
   );

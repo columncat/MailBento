@@ -18,7 +18,7 @@ export BOOTSTRAP_HASH
 
 OWNER="${BENTO_GITHUB_OWNER:-columncat}"
 REF="${BENTO_REF:-main}"
-REPOS="MailBento MemoBento PaperBento VoiceBento BentoAgent"
+REPOS="MailBento MemoBento PaperBento VoiceBento LedgerBento BentoAgent"
 
 # compose 는 v2 플러그인일 수도, v1 독립 실행 파일일 수도 있다.
 if docker compose version >/dev/null 2>&1; then
@@ -259,6 +259,39 @@ chmod -R a+rX "$MODELS_DIR" 2>/dev/null || true
 BENTO_MCP_CACHEBUST="$(git -C src/MemoBento rev-parse --short HEAD 2>/dev/null || echo x)-$(git -C src/MailBento rev-parse --short HEAD 2>/dev/null || echo x)"
 export BENTO_MCP_CACHEBUST
 
+# ── 장부함의 MCP ──
+#
+# 에이전트가 이걸 자식 프로세스로 띄운다. 다른 앱들의 MCP 는 에이전트 이미지가
+# 빌드하며 GitHub 에서 받아 오는데, 장부함은 **비공개 저장소**라 그 길이 막혀
+# 있다 — 도커 데몬에 자격 증명을 쥐여 줘야 하기 때문이다. 받는 일은 위에서
+# 사람 계정으로 이미 했으니, 컴파일만 여기서 하고 compose 가 그 폴더를 읽기
+# 전용으로 물려 준다.
+#
+# 호스트에 node 가 없어도 되도록 컨테이너 안에서 짓는다. 이미 지어 둔 것이
+# 최신이면 건너뛴다 — dist 가 src 보다 새것인지로 본다.
+#
+# **여기서 실패해도 스택을 세우지 않는다.** 모델 블록과 같은 규율이다.
+# 이게 없으면 에이전트가 장부 도구만 못 쓰고 나머지는 그대로 돈다.
+build_ledger_mcp() {
+  [ -d src/LedgerBento/mcp ] || return 0
+  if [ -f src/LedgerBento/mcp/dist/index.js ] \
+     && [ -z "$(find src/LedgerBento/mcp/src -newer src/LedgerBento/mcp/dist/index.js -print -quit)" ]; then
+    return 0
+  fi
+  echo "── 장부함 MCP 짓기"
+  docker run --rm \
+    -v "$PWD/src/LedgerBento/mcp:/w" -w /w \
+    -u "$(id -u):$(id -g)" \
+    -e npm_config_cache=/tmp/.npm \
+    node:22-bookworm-slim \
+    sh -c 'npm ci --omit=dev --ignore-scripts \
+        && npm install --no-save typescript @types/node \
+        && npx tsc \
+        && npm prune --omit=dev'
+}
+
+build_ledger_mcp || echo "  장부함 MCP 를 짓지 못했습니다. 에이전트의 장부 도구만 안 됩니다." >&2
+
 echo "── 빌드"
 $COMPOSE build
 
@@ -274,6 +307,8 @@ $COMPOSE run --rm --no-deps --user 0 --entrypoint sh paperbento \
   -c 'chown -R 1001:1001 /app/data' >/dev/null
 # 모델 볼륨(/models)은 읽기 전용이라 여기 끼지 않는다. 위에서 chmod 로 열어 둔다.
 $COMPOSE run --rm --no-deps --user 0 --entrypoint sh voicebento \
+  -c 'chown -R 1001:1001 /app/data' >/dev/null
+$COMPOSE run --rm --no-deps --user 0 --entrypoint sh ledgerbento \
   -c 'chown -R 1001:1001 /app/data' >/dev/null
 
 echo "── 시작"

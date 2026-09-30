@@ -1,8 +1,8 @@
 # Bento 스택
 
 메일함(MailBento) · 메모함(MemoBento) · 논문함(PaperBento) · 음성함(VoiceBento) ·
-에이전트(BentoAgent) 다섯 컨테이너를 한 스택으로 띄운다. 다섯은 `bento` 네트워크
-하나에 들어가고, 서로를 서비스 이름으로 부른다.
+장부함(LedgerBento) · 에이전트(BentoAgent) 여섯 컨테이너를 한 스택으로 띄운다.
+여섯은 `bento` 네트워크 하나에 들어가고, 서로를 서비스 이름으로 부른다.
 
 ## 새 기계에 설치
 
@@ -14,12 +14,23 @@ chmod +x bootstrap.sh
 ./bootstrap.sh
 ```
 
-저장소 다섯을 받아 이미지를 만들고 컨테이너를 띄운다. 첫 빌드는 몇 분 걸린다
+저장소 여섯을 받아 이미지를 만들고 컨테이너를 띄운다. 첫 빌드는 몇 분 걸린다
 (에이전트 이미지가 Claude Code CLI 를 통째로 설치하고, 음성함이 쓸 전사 모델
 487MB 를 함께 받는다).
 
 끝나면 브라우저로 **`http://<이 기계 주소>:3000`** 을 연다. 설치 마법사가
-떠 있다. 값을 채우고 저장하면 다섯 서비스가 차례로 올라온다.
+떠 있다. 값을 채우고 저장하면 여섯 서비스가 차례로 올라온다.
+
+### 장부함은 비공개 저장소다
+
+나머지 넷과 달리 `columncat/LedgerBento` 는 비공개라, 이 기계에 GitHub 자격이
+있어야 받아진다. 없으면 소스를 `src/LedgerBento` 에 직접 올려 두고 다시 실행한다
+(에이전트와 같은 사정이다).
+
+그래서 **에이전트가 쓸 장부함 MCP 도 이미지가 받지 않는다.** 도커에게 자격을
+쥐여 주는 대신, `bootstrap.sh` 가 `src/LedgerBento/mcp` 를 컨테이너 하나로
+컴파일해 두고 compose 가 그 폴더를 읽기 전용으로 물려 준다. 호스트에 node 가
+없어도 된다.
 
 ### 전사 모델은 이미지가 아니라 볼륨에 산다
 
@@ -127,6 +138,7 @@ MAILBENTO_PORT=3000
 MEMOBENTO_PORT=3001
 PAPERBENTO_PORT=3002
 VOICEBENTO_PORT=3003
+LEDGERBENTO_PORT=3004
 AGENT_PORT=4000
 ```
 

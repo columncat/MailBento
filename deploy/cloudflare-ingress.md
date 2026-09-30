@@ -1,7 +1,7 @@
 # Cloudflare 터널에 얹기
 
 한 도메인을 경로로 나눠 쓰는 배포(`bento.example.com/mail` · `/memo` · `/paper` ·
-`/voice`)를 터널 뒤에 두는 방법.
+`/voice` · `/ledger`)를 터널 뒤에 두는 방법.
 
 ## 앱 쪽
 
@@ -13,6 +13,7 @@ MAILBENTO_BASE_PATH=/mail
 MEMOBENTO_BASE_PATH=/memo
 PAPERBENTO_BASE_PATH=/paper
 VOICEBENTO_BASE_PATH=/voice
+LEDGERBENTO_BASE_PATH=/ledger
 ```
 
 ```sh
@@ -20,7 +21,7 @@ VOICEBENTO_BASE_PATH=/voice
 ```
 
 그리고 앱끼리 오가는 버튼 주소를 설정에 적는다. 비워 두면 접속한 호스트의
-3000·3001·3002·3003 포트로 유추하는데, 한 도메인을 나눠 쓰면 그 유추가 맞지 않는다.
+3000·3001·3002·3003·3004 포트로 유추하는데, 한 도메인을 나눠 쓰면 그 유추가 맞지 않는다.
 
 ```
 # config/mailbento.env
@@ -42,6 +43,19 @@ VOICEBENTO_URL='https://bento.example.com/voice'
 MAILBENTO_URL='https://bento.example.com/mail'
 MEMOBENTO_URL='https://bento.example.com/memo'
 PAPERBENTO_URL='https://bento.example.com/paper'
+
+# config/ledgerbento.env
+MAILBENTO_URL='https://bento.example.com/mail'
+MEMOBENTO_URL='https://bento.example.com/memo'
+```
+
+장부함은 **에이전트도 하위 경로까지 알아야 한다.** MCP 는 받은 주소 뒤에
+`/api/…` 를 이어 붙일 뿐 경로를 버리지 않으므로, 컨테이너 안에서 부르는 주소도
+경로를 달고 있어야 한다.
+
+```
+# config/bentoagent.env
+LEDGERBENTO_URL='http://ledgerbento:3000/ledger'
 ```
 
 설치 마법사의 **주소** 칸에 적으면 이 네 파일에 알아서 들어간다.
@@ -65,6 +79,7 @@ PAPERBENTO_URL='https://bento.example.com/paper'
 | `bento.example.com` | `^/memo(/\|$)` | `http://localhost:3001` |
 | `bento.example.com` | `^/paper(/\|$)` | `http://localhost:3002` |
 | `bento.example.com` | `^/voice(/\|$)` | `http://localhost:3003` |
+| `bento.example.com` | `^/ledger(/\|$)` | `http://localhost:3004` |
 | (그 외) | | `http_status:404` |
 
 ### 경로는 글롭이 아니라 정규식이다. 앵커를 빼지 마라
@@ -131,6 +146,8 @@ curl -X PUT "$API/accounts/$ACCOUNT/cfd_tunnel/$TUNNEL/configurations" \
           "service": "http://localhost:3002" },
         { "hostname": "bento.example.com", "path": "^/voice(/|$)",
           "service": "http://localhost:3003" },
+        { "hostname": "bento.example.com", "path": "^/ledger(/|$)",
+          "service": "http://localhost:3004" },
         { "service": "http_status:404" }
       ]
     }
