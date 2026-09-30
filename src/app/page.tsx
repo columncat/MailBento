@@ -32,6 +32,7 @@ export default async function HomePage() {
       authEnabled={isAuthEnabled()}
       memobentoUrl={env.MEMOBENTO_URL?.trim() || null}
       paperbentoUrl={env.PAPERBENTO_URL?.trim() || null}
+      ledgerbentoUrl={env.LEDGERBENTO_URL?.trim() || null}
     />
   );
 }

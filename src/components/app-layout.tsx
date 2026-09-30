@@ -20,6 +20,8 @@ interface Props {
   memobentoUrl: string | null;
   /** PAPERBENTO_URL override. null 이면 현재 호스트의 3002 포트로 유추. */
   paperbentoUrl: string | null;
+  /** LEDGERBENTO_URL override. null 이면 현재 호스트의 3004 포트로 유추. */
+  ledgerbentoUrl: string | null;
 }
 
 export function AppLayout(props: Props) {

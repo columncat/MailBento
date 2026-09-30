@@ -179,6 +179,10 @@ const HTML = String.raw`<!doctype html>
           <label>음성함 주소</label>
           <input type="text" name="voicebentoUrl" placeholder="예: https://voice.example.com">
         </div>
+        <div>
+          <label>장부함 주소</label>
+          <input type="text" name="ledgerbentoUrl" placeholder="예: https://ledger.example.com">
+        </div>
       </div>
       <label>업로드 한 개 최대 크기 (MB)</label>
       <input type="number" name="maxUploadMb" value="5120" min="1">
@@ -287,11 +291,7 @@ function save(input) {
   const memobentoUrl = pick(input.memobentoUrl);
   const paperbentoUrl = pick(input.paperbentoUrl);
   const voicebentoUrl = pick(input.voicebentoUrl);
-  /*
-   * 장부함 주소를 묻는 칸은 두지 않았다. 형제 앱들의 머리글에 장부함으로
-   * 건너가는 버튼이 아직 없어서, 물어 봐야 아무 데도 안 쓰인다. 버튼을
-   * 놓는 날 이 칸과 각 앱의 LEDGERBENTO_URL 을 함께 넣으면 된다.
-   */
+  const ledgerbentoUrl = pick(input.ledgerbentoUrl);
   const maxUploadMb = pick(input.maxUploadMb) || "5120";
 
   const shared = {
@@ -309,6 +309,7 @@ function save(input) {
       MEMOBENTO_URL: memobentoUrl,
       PAPERBENTO_URL: paperbentoUrl,
       VOICEBENTO_URL: voicebentoUrl,
+      LEDGERBENTO_URL: ledgerbentoUrl,
     }),
     { mode: 0o600 },
   );
@@ -320,6 +321,7 @@ function save(input) {
       MAILBENTO_URL: mailbentoUrl,
       PAPERBENTO_URL: paperbentoUrl,
       VOICEBENTO_URL: voicebentoUrl,
+      LEDGERBENTO_URL: ledgerbentoUrl,
       MAX_UPLOAD_MB: maxUploadMb,
       // Corkboard 와 Memo 메모함은 메일함과 같은 자료를 쓴다. 이 경로가 없으면
       // 두 앱이 각자의 사본을 보게 되어 한쪽에서 고친 것이 다른 쪽에 안 보인다.
@@ -339,6 +341,7 @@ function save(input) {
       MAILBENTO_URL: mailbentoUrl,
       MEMOBENTO_URL: memobentoUrl,
       VOICEBENTO_URL: voicebentoUrl,
+      LEDGERBENTO_URL: ledgerbentoUrl,
       MAX_UPLOAD_MB: maxUploadMb,
     }),
     { mode: 0o600 },
@@ -367,6 +370,7 @@ function save(input) {
       MAILBENTO_URL: mailbentoUrl,
       MEMOBENTO_URL: memobentoUrl,
       PAPERBENTO_URL: paperbentoUrl,
+      LEDGERBENTO_URL: ledgerbentoUrl,
       MEMOBENTO_API_URL: "http://memobento:3000",
       MEMOBENTO_PASSWORD: password,
       MAX_UPLOAD_MB: maxUploadMb,

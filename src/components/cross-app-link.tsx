@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUpRight, BookMarked, Mail, StickyNote } from "lucide-react";
+import { ArrowUpRight, BookMarked, Mail, StickyNote, Wallet } from "lucide-react";
 import { useEffect, useState } from "react";
 
 /**
@@ -38,6 +38,7 @@ const APPS = {
   mailbento: { label: "MailBento", icon: Mail, port: 3000 },
   paperbento: { label: "PaperBento", icon: BookMarked, port: 3002 },
   memobento: { label: "MemoBento", icon: StickyNote, port: 3001 },
+  ledgerbento: { label: "LedgerBento", icon: Wallet, port: 3004 },
 } as const;
 
 /**

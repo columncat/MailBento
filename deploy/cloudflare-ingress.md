@@ -49,6 +49,13 @@ MAILBENTO_URL='https://bento.example.com/mail'
 MEMOBENTO_URL='https://bento.example.com/memo'
 ```
 
+그리고 형제 넷에는 장부함 주소를 준다.
+
+```
+# config/mailbento.env · memobento.env · paperbento.env · voicebento.env
+LEDGERBENTO_URL='https://bento.example.com/ledger'
+```
+
 장부함은 **에이전트도 하위 경로까지 알아야 한다.** MCP 는 받은 주소 뒤에
 `/api/…` 를 이어 붙일 뿐 경로를 버리지 않으므로, 컨테이너 안에서 부르는 주소도
 경로를 달고 있어야 한다.
