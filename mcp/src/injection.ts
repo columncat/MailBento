@@ -72,7 +72,7 @@ const NAME_LIMIT = 30;
  * 위험한 것은 남겼다.
  *
  * - **표시 이름을 통째로 버렸다.** `MyISS vMISCi <noreply@…>` 가
- *   `norep…purdue.edu` 가 됐다. 어디서 왔는지 가장 잘 말해 주는 부분이다.
+ *   `norep…example.edu` 가 됐다. 어디서 왔는지 가장 잘 말해 주는 부분이다.
  * - **도메인을 잘라 오히려 속였다.** `zeiglersubaru.com` 이 `subaru.com` 이
  *   되어 대리점이 제조사처럼 보였고, `kaist.ac.kr` 은 `aist.ac.kr` 이라는
  *   없는 도메인이 됐다.
