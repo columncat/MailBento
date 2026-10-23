@@ -23,20 +23,33 @@ import { cn } from "@/lib/utils";
 
 /** `[[memo:<id>]]` 를 무엇으로 바꿔 그릴지. block=true 면 한 줄을 통째로 차지한다. */
 export type MemoSlot = (memoId: string, block: boolean) => ReactNode;
+/** `[[ledger:<id>]]` 를 무엇으로 바꿔 그릴지. 모양은 메모 쪽과 같다. */
+export type LedgerSlot = (entryId: string, block: boolean) => ReactNode;
+
+type RefKind = "memo" | "ledger";
+/** 안에서 쓰는 하나로 합친 자리. 표시의 종류를 함께 넘긴다. */
+type RefSlot = (kind: RefKind, id: string, block: boolean) => ReactNode | undefined;
 
 export function RichText({
   text,
   memoSlot,
+  ledgerSlot,
   className,
 }: {
   text: string;
   memoSlot?: MemoSlot;
+  ledgerSlot?: LedgerSlot;
   className?: string;
 }) {
   const blocks = useMemo(() => parseBlocks(text), [text]);
+  const slot: RefSlot | undefined =
+    memoSlot || ledgerSlot
+      ? (kind, id, block) =>
+          kind === "memo" ? memoSlot?.(id, block) : ledgerSlot?.(id, block)
+      : undefined;
   return (
     <div className={cn("space-y-2", className)}>
-      {blocks.map((b, i) => renderBlock(b, i, memoSlot))}
+      {blocks.map((b, i) => renderBlock(b, i, slot))}
     </div>
   );
 }
@@ -55,10 +68,17 @@ type Block =
   | { k: "code"; body: string }
   | { k: "list"; ordered: boolean; items: ListItem[] }
   | { k: "quote"; text: string }
-  | { k: "memo"; id: string }
+  | { k: "memo"; kind: RefKind; id: string }
   | { k: "hr" };
 
-const MEMO_ID = "[A-Za-z0-9_-]{1,64}";
+/**
+ * 참조 id. 장부 회차는 `규칙id@날짜` 라 `@날짜` 꼬리를 받는다.
+ *
+ * 장부 항목을 `[[memo:…]]` 로 적으면 메모함에서 못 찾는다 — 실제로 그렇게
+ * 적혀 "없는 메모" 가 줄줄이 떴다. 두 앱의 id 생김새가 같아 표시의 앞머리가
+ * 어느 쪽인지 말한다.
+ */
+const MEMO_ID = "[A-Za-z0-9_-]{1,64}(?:@\\d{4}-\\d{2}-\\d{2})?";
 /**
  * 한 줄이 통째로 메모 참조인 경우.
  *
@@ -66,7 +86,7 @@ const MEMO_ID = "[A-Za-z0-9_-]{1,64}";
  * 적었을 때 — 에이전트에게 그렇게 적으라고 시켜 둔 방식이다 — 둘이 한 문단에
  * 갇혀 카드로 그려지지 않는다.
  */
-const SOLE_MEMO = new RegExp(`^\\s*\\[\\[memo:(${MEMO_ID})\\]\\]\\s*$`);
+const SOLE_MEMO = new RegExp(`^\\s*\\[\\[(memo|ledger):(${MEMO_ID})\\]\\]\\s*$`);
 
 const FENCE = /^\s{0,3}```/;
 const HEADING = /^(#{1,6})\s+(.*)$/;
@@ -130,7 +150,7 @@ function parseBlocks(src: string): Block[] {
 
     const solo = SOLE_MEMO.exec(line);
     if (solo) {
-      out.push({ k: "memo", id: solo[1] });
+      out.push({ k: "memo", kind: solo[1] as RefKind, id: solo[2] });
       i += 1;
       continue;
     }
@@ -204,7 +224,7 @@ const URL_BODY = "(?:[^()\\s]|\\([^()\\s]*\\))";
 const INLINE = new RegExp(
   [
     "(?<code>`[^`\\n]+`)",
-    `(?<memo>\\[\\[memo:${MEMO_ID}\\]\\])`,
+    `(?<memo>\\[\\[(?:memo|ledger):${MEMO_ID}\\]\\])`,
     `(?<img>!\\[[^\\]\\n]*\\]\\(${URL_BODY}*\\))`,
     `(?<link>\\[[^\\]\\n]*\\]\\(${URL_BODY}+\\))`,
     "(?<bold>\\*\\*(?:[^*\\n]|\\*(?!\\*))+\\*\\*)",
@@ -215,7 +235,7 @@ const INLINE = new RegExp(
   "g",
 );
 
-function renderInline(text: string, slot: MemoSlot | undefined, keyBase: string): ReactNode[] {
+function renderInline(text: string, slot: RefSlot | undefined, keyBase: string): ReactNode[] {
   const out: ReactNode[] = [];
   let last = 0;
   let n = 0;
@@ -238,11 +258,10 @@ function renderInline(text: string, slot: MemoSlot | undefined, keyBase: string)
         </code>,
       );
     } else if (g.memo) {
-      const id = g.memo.slice("[[memo:".length, -2);
+      const kind: RefKind = g.memo.startsWith("[[ledger:") ? "ledger" : "memo";
+      const id = g.memo.slice(`[[${kind}:`.length, -2);
       out.push(
-        <Fragment key={key}>
-          {slot ? slot(id, false) : <MissingSlot id={id} />}
-        </Fragment>,
+        <Fragment key={key}>{slot?.(kind, id, false) ?? <MissingSlot kind={kind} id={id} />}</Fragment>,
       );
     } else if (g.img) {
       // 절대 불러오지 않는다. 대체 글자만 남긴다.
@@ -281,10 +300,10 @@ function renderInline(text: string, slot: MemoSlot | undefined, keyBase: string)
   return out;
 }
 
-function MissingSlot({ id }: { id: string }) {
+function MissingSlot({ kind, id }: { kind: RefKind; id: string }) {
   return (
     <span className="rounded bg-(--color-bg) px-1.5 py-0.5 font-mono text-[11px] text-(--color-fg-4)">
-      메모 {id}
+      {kind === "ledger" ? "장부" : "메모"} {id}
     </span>
   );
 }
@@ -331,7 +350,7 @@ function InlineLink({ label, href }: { label: string; href: string }) {
 
 // ── 블록 그리기 ────────────────────────────────────────────────
 
-function renderBlock(b: Block, i: number, slot?: MemoSlot): ReactNode {
+function renderBlock(b: Block, i: number, slot?: RefSlot): ReactNode {
   const key = `b${i}`;
 
   switch (b.k) {
@@ -378,10 +397,11 @@ function renderBlock(b: Block, i: number, slot?: MemoSlot): ReactNode {
         const sole = SOLE_MEMO.exec(it.text);
         // 메모 한 개짜리 항목은 글머리표를 떼고 카드로 그린다. 카드 옆에
         // 점이 붙으면 두 번 세는 것처럼 보인다.
-        if (sole && slot) {
+        const card = sole ? slot?.(sole[1] as RefKind, sole[2], true) : undefined;
+        if (card) {
           return (
             <li key={j} className="-ml-5 list-none">
-              {slot(sole[1], true)}
+              {card}
             </li>
           );
         }
@@ -410,13 +430,16 @@ function renderBlock(b: Block, i: number, slot?: MemoSlot): ReactNode {
     case "memo":
       // 그릴 줄 모르는 앱에서는 회색 조각으로 남는다. 조각은 인라인이라
       // 감싸 주지 않으면 여러 개가 한 줄에 붙는다.
-      return slot ? (
-        <Fragment key={key}>{slot(b.id, true)}</Fragment>
-      ) : (
-        <p key={key}>
-          <MissingSlot id={b.id} />
-        </p>
-      );
+      {
+        const card = slot?.(b.kind, b.id, true);
+        return card ? (
+          <Fragment key={key}>{card}</Fragment>
+        ) : (
+          <p key={key}>
+            <MissingSlot kind={b.kind} id={b.id} />
+          </p>
+        );
+      }
 
     case "p":
       return (

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { Check, StickyNote } from "lucide-react";
 
+import { LedgerRef } from "@/components/ledger-ref";
 import { apiPath } from "@/lib/api-path";
 import { readJson } from "@/lib/read-json";
 
@@ -124,7 +125,11 @@ export function MemoRef({ memoId, block }: { memoId: string; block: boolean }) {
   );
 
   if (memo === undefined) return chip("메모 불러오는 중…");
-  if (memo === null) return chip("지워졌거나 없는 메모");
+  // 메모함에 없으면 장부에서 한 번 더 찾는다. 에이전트가 장부 항목을
+  // `[[memo:…]]` 로 적은 지난 대화가 남아 있다 — 그 id 는 메모함에 영영 없다.
+  if (memo === null) {
+    return <LedgerRef entryId={memoId} block={block} missing="지워졌거나 없는 메모" />;
+  }
 
   const checkable = memo.checkable;
   const done = checkable && memo.done;

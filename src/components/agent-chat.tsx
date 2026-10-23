@@ -3,6 +3,7 @@
 import { Loader2, Paperclip, RotateCcw, Send, Sparkles, X } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 
+import { LedgerRef } from "@/components/ledger-ref";
 import { RichText, type MemoSlot } from "@/components/rich-text";
 import { isUnauthenticated, readJson } from "@/lib/read-json";
 import { cn } from "@/lib/utils";
@@ -65,6 +66,14 @@ interface Props {
    */
   renderMemoRef?: MemoSlot;
 }
+
+/**
+ * 장부 항목은 이 창이 스스로 그린다. 두 앱 모두 다리를 거쳐 읽으므로 넘겨받을
+ * 것이 없다 — 메모처럼 앱마다 다를 까닭이 없다.
+ */
+const ledgerSlot = (entryId: string, block: boolean) => (
+  <LedgerRef entryId={entryId} block={block} />
+);
 
 export function AgentChat({ renderMemoRef }: Props = {}) {
   // 설정되지 않은 배포에서는 버튼 자체를 두지 않는다. 눌러야 알 수 있는
@@ -403,7 +412,11 @@ export function AgentChat({ renderMemoRef }: Props = {}) {
                   {t.role === "me" || t.error ? (
                     <span className="whitespace-pre-wrap">{t.text}</span>
                   ) : (
-                    <RichText text={t.text} memoSlot={renderMemoRef} />
+                    <RichText
+                      text={t.text}
+                      memoSlot={renderMemoRef}
+                      ledgerSlot={ledgerSlot}
+                    />
                   )}
                   {t.denials && t.denials.length > 0 && (
                     <p className="mt-1.5 text-[11px] text-(--color-warn)">
