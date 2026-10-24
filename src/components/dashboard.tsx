@@ -41,7 +41,7 @@ import {
 
 import { AgentChat } from "./agent-chat";
 import { MemoRef } from "./memo-ref";
-import { CrossAppLink } from "./cross-app-link";
+import { AppSwitcher, type AppUrls } from "./cross-app-link";
 import { InboxCard } from "./inbox-card";
 import { SortableInboxCard } from "./sortable-inbox-card";
 import { WidgetFoldersWing } from "./widget-folders-wing";
@@ -81,9 +81,7 @@ export function Dashboard({
   regions,
   widgetEnabled,
   onWidgetToggle,
-  memobentoUrl,
-  paperbentoUrl,
-  ledgerbentoUrl,
+  appUrls,
 }: {
   initialAccounts: AccountSummary[];
   initialWidgetState: WidgetState;
@@ -91,12 +89,8 @@ export function Dashboard({
   regions: RegionInput[];
   widgetEnabled: boolean;
   onWidgetToggle: (v: boolean) => void;
-  /** MEMOBENTO_URL override. null 이면 현재 호스트의 3001 포트로 유추. */
-  memobentoUrl: string | null;
-  /** PAPERBENTO_URL override. null 이면 현재 호스트의 3002 포트로 유추. */
-  paperbentoUrl: string | null;
-  /** LEDGERBENTO_URL override. null 이면 현재 호스트의 3004 포트로 유추. */
-  ledgerbentoUrl: string | null;
+  /** 형제 앱 주소 (`lib/app-urls.ts`). 빈 칸은 화면이 유추한다. */
+  appUrls: AppUrls;
 }) {
   const [boxes, setBoxes] = useState<BoxState[]>(() =>
     initialAccounts.map((a) => ({
@@ -411,9 +405,7 @@ export function Dashboard({
           <AgentChat
             renderMemoRef={(memoId, block) => <MemoRef memoId={memoId} block={block} />}
           />
-          <CrossAppLink app="memobento" href={memobentoUrl} />
-          <CrossAppLink app="paperbento" href={paperbentoUrl} />
-          <CrossAppLink app="ledgerbento" href={ledgerbentoUrl} />
+          <AppSwitcher urls={appUrls} />
           <button
             type="button"
             onClick={() => fetchInboxes(true)}

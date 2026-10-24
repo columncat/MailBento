@@ -385,7 +385,8 @@ function save(input) {
 
   /*
    * 장부함. 가장 단출하다 — 남의 DB 도, 올리는 파일도, 모델도 없다.
-   * 건너가는 버튼 주소와 기본 통화뿐이다.
+   * 앱 전환 메뉴의 주소와 기본 통화뿐이다. 메뉴는 다섯 앱을 다 보이므로
+   * 주소도 다 준다 — 하나라도 빠지면 그 칸만 엉뚱한 포트로 간다.
    */
   writeFileSync(
     join(CONFIG_DIR, "ledgerbento.env"),
@@ -393,6 +394,8 @@ function save(input) {
       ...shared,
       MAILBENTO_URL: mailbentoUrl,
       MEMOBENTO_URL: memobentoUrl,
+      PAPERBENTO_URL: paperbentoUrl,
+      VOICEBENTO_URL: voicebentoUrl,
       DEFAULT_CURRENCY: "KRW",
     }),
     { mode: 0o600 },

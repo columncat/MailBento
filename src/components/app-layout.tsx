@@ -9,6 +9,7 @@ import {
   type WidgetState,
 } from "@/lib/widget-storage";
 
+import type { AppUrls } from "./cross-app-link";
 import { Dashboard, type AccountSummary } from "./dashboard";
 
 interface Props {
@@ -16,12 +17,8 @@ interface Props {
   initialWidgetState: WidgetState;
   regions: RegionInput[];
   authEnabled: boolean;
-  /** MEMOBENTO_URL override. null 이면 현재 호스트의 3001 포트로 유추. */
-  memobentoUrl: string | null;
-  /** PAPERBENTO_URL override. null 이면 현재 호스트의 3002 포트로 유추. */
-  paperbentoUrl: string | null;
-  /** LEDGERBENTO_URL override. null 이면 현재 호스트의 3004 포트로 유추. */
-  ledgerbentoUrl: string | null;
+  /** 형제 앱 주소 (`lib/app-urls.ts`). 빈 칸은 화면이 유추한다. */
+  appUrls: AppUrls;
 }
 
 export function AppLayout(props: Props) {

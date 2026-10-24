@@ -20,7 +20,7 @@ LEDGERBENTO_BASE_PATH=/ledger
 ./bootstrap.sh
 ```
 
-그리고 앱끼리 오가는 버튼 주소를 설정에 적는다. 비워 두면 접속한 호스트의
+그리고 앱끼리 오가는 메뉴의 주소를 설정에 적는다. 비워 두면 접속한 호스트의
 3000·3001·3002·3003·3004 포트로 유추하는데, 한 도메인을 나눠 쓰면 그 유추가 맞지 않는다.
 
 ```
@@ -47,7 +47,13 @@ PAPERBENTO_URL='https://bento.example.com/paper'
 # config/ledgerbento.env
 MAILBENTO_URL='https://bento.example.com/mail'
 MEMOBENTO_URL='https://bento.example.com/memo'
+PAPERBENTO_URL='https://bento.example.com/paper'
+VOICEBENTO_URL='https://bento.example.com/voice'
 ```
+
+머리글의 앱 전환 메뉴는 어느 앱에서나 다섯을 다 보인다. 그래서 **자기 자신을
+뺀 넷의 주소가 모두 있어야 한다** — 하나라도 빠지면 메뉴의 그 칸만 유추한
+포트로 가서 열리지 않는다.
 
 그리고 형제 넷에는 장부함 주소를 준다.
 

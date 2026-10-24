@@ -2,7 +2,7 @@ import { AppLayout } from "@/components/app-layout";
 import { getAppConfig } from "@/lib/app-config";
 import { isAuthEnabled } from "@/lib/auth";
 import { db, schema } from "@/lib/db";
-import { env } from "@/lib/env";
+import { appUrls } from "@/lib/app-urls";
 import { getWidgetState } from "@/lib/widget-server";
 
 export const dynamic = "force-dynamic";
@@ -30,9 +30,7 @@ export default async function HomePage() {
       initialWidgetState={widgetState}
       regions={appConfig.regions}
       authEnabled={isAuthEnabled()}
-      memobentoUrl={env.MEMOBENTO_URL?.trim() || null}
-      paperbentoUrl={env.PAPERBENTO_URL?.trim() || null}
-      ledgerbentoUrl={env.LEDGERBENTO_URL?.trim() || null}
+      appUrls={appUrls()}
     />
   );
 }
