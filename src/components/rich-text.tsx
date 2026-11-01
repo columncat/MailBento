@@ -25,8 +25,10 @@ import { cn } from "@/lib/utils";
 export type MemoSlot = (memoId: string, block: boolean) => ReactNode;
 /** `[[ledger:<id>]]` 를 무엇으로 바꿔 그릴지. 모양은 메모 쪽과 같다. */
 export type LedgerSlot = (entryId: string, block: boolean) => ReactNode;
+/** `[[mail:<메일함id>:<메시지id>]]` 를 무엇으로 바꿔 그릴지. */
+export type MailSlot = (mailRef: string, block: boolean) => ReactNode;
 
-type RefKind = "memo" | "ledger";
+type RefKind = "memo" | "ledger" | "mail";
 /** 안에서 쓰는 하나로 합친 자리. 표시의 종류를 함께 넘긴다. */
 type RefSlot = (kind: RefKind, id: string, block: boolean) => ReactNode | undefined;
 
@@ -34,18 +36,24 @@ export function RichText({
   text,
   memoSlot,
   ledgerSlot,
+  mailSlot,
   className,
 }: {
   text: string;
   memoSlot?: MemoSlot;
   ledgerSlot?: LedgerSlot;
+  mailSlot?: MailSlot;
   className?: string;
 }) {
   const blocks = useMemo(() => parseBlocks(text), [text]);
   const slot: RefSlot | undefined =
-    memoSlot || ledgerSlot
+    memoSlot || ledgerSlot || mailSlot
       ? (kind, id, block) =>
-          kind === "memo" ? memoSlot?.(id, block) : ledgerSlot?.(id, block)
+          kind === "memo"
+            ? memoSlot?.(id, block)
+            : kind === "mail"
+              ? mailSlot?.(id, block)
+              : ledgerSlot?.(id, block)
       : undefined;
   return (
     <div className={cn("space-y-2", className)}>
@@ -80,13 +88,20 @@ type Block =
  */
 const MEMO_ID = "[A-Za-z0-9_-]{1,64}(?:@\\d{4}-\\d{2}-\\d{2})?";
 /**
+ * 메일 참조 id — `<메일함id>:<메시지id>`. 메시지 id 는 제공자마다 생김새가 달라
+ * (IMAP 은 숫자, 다른 곳은 base64 비슷한 것) 조금 넓게 받는다.
+ * 메모 id 보다 **먼저** 맞춰 본다. 메모 쪽이 콜론 앞 숫자만 먹고 멈추면 안 된다.
+ */
+const MAIL_ID = "\\d{1,9}:[A-Za-z0-9_.=+/-]{1,200}";
+const REF_ID = `(?:${MAIL_ID}|${MEMO_ID})`;
+/**
  * 한 줄이 통째로 메모 참조인 경우.
  *
  * 블록 단계에서 잘라 내야 한다. 문단으로 합쳐 버리면 참조를 줄마다 하나씩
  * 적었을 때 — 에이전트에게 그렇게 적으라고 시켜 둔 방식이다 — 둘이 한 문단에
  * 갇혀 카드로 그려지지 않는다.
  */
-const SOLE_MEMO = new RegExp(`^\\s*\\[\\[(memo|ledger):(${MEMO_ID})\\]\\]\\s*$`);
+const SOLE_MEMO = new RegExp(`^\\s*\\[\\[(memo|ledger|mail):(${REF_ID})\\]\\]\\s*$`);
 
 const FENCE = /^\s{0,3}```/;
 const HEADING = /^(#{1,6})\s+(.*)$/;
@@ -224,7 +239,7 @@ const URL_BODY = "(?:[^()\\s]|\\([^()\\s]*\\))";
 const INLINE = new RegExp(
   [
     "(?<code>`[^`\\n]+`)",
-    `(?<memo>\\[\\[(?:memo|ledger):${MEMO_ID}\\]\\])`,
+    `(?<memo>\\[\\[(?:memo|ledger|mail):${REF_ID}\\]\\])`,
     `(?<img>!\\[[^\\]\\n]*\\]\\(${URL_BODY}*\\))`,
     `(?<link>\\[[^\\]\\n]*\\]\\(${URL_BODY}+\\))`,
     "(?<bold>\\*\\*(?:[^*\\n]|\\*(?!\\*))+\\*\\*)",
@@ -258,7 +273,11 @@ function renderInline(text: string, slot: RefSlot | undefined, keyBase: string):
         </code>,
       );
     } else if (g.memo) {
-      const kind: RefKind = g.memo.startsWith("[[ledger:") ? "ledger" : "memo";
+      const kind: RefKind = g.memo.startsWith("[[ledger:")
+        ? "ledger"
+        : g.memo.startsWith("[[mail:")
+          ? "mail"
+          : "memo";
       const id = g.memo.slice(`[[${kind}:`.length, -2);
       out.push(
         <Fragment key={key}>{slot?.(kind, id, false) ?? <MissingSlot kind={kind} id={id} />}</Fragment>,
@@ -303,7 +322,7 @@ function renderInline(text: string, slot: RefSlot | undefined, keyBase: string):
 function MissingSlot({ kind, id }: { kind: RefKind; id: string }) {
   return (
     <span className="rounded bg-(--color-bg) px-1.5 py-0.5 font-mono text-[11px] text-(--color-fg-4)">
-      {kind === "ledger" ? "장부" : "메모"} {id}
+      {kind === "ledger" ? "장부" : kind === "mail" ? "메일" : "메모"} {id}
     </span>
   );
 }

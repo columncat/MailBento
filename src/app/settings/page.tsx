@@ -9,6 +9,7 @@ import { detailCacheStats } from "@/lib/message-detail-cache";
 
 import { AccountActions } from "./account-actions";
 import { AgentPanel } from "./agent-panel";
+import { AgentPrefsPanel } from "./agent-prefs-panel";
 import { BodyCachePanel } from "./body-cache-panel";
 import { PreferencesPanel } from "./preferences-panel";
 import { RegionsSetting } from "./regions-setting";
@@ -153,6 +154,7 @@ export default async function SettingsPage({
 
       {/* 에이전트 — Claude 인증 갱신과 Discord 켜고 끄기 */}
       <AgentPanel />
+      <AgentPrefsPanel />
 
       {/* 표시 설정 */}
       <PreferencesPanel />
