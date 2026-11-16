@@ -205,6 +205,43 @@ services:
     networks: [bento]
     depends_on: [mailbento]
 
+  # Claude 웹의 커스텀 커넥터 입구. BentoAgent 와 같은 이미지를 다른 진입점으로 띄운다.
+  #
+  # 네 앱의 MCP 를 한데 묶어 OAuth 뒤에서 HTTP 로 내보낸다. 인터넷(Anthropic 서버)이
+  # 직접 부르는 자리라 에이전트와 컨테이너를 나눴다 — 여기가 막혀도 봇은 그대로 돈다.
+  #
+  # 기본으로는 뜨지 않는다(`profiles`). 쓰려면 옆의 .env 에
+  #   COMPOSE_PROFILES=connector
+  #   CONNECTOR_PUBLIC_URL=https://<밖에서 보이는 주소>
+  #   CONNECTOR_ACCESS_AUD=<승인 화면(/authorize)을 막는 Cloudflare Access 앱의 aud>
+  # 를 넣는다. aud 가 없으면 승인 화면이 모두 거절해서 아무도 연결할 수 없다.
+  bentoconnector:
+    container_name: BentoConnector
+    profiles: [connector]
+    build:
+      context: ./src/BentoAgent
+      args:
+        MCP_CACHEBUST: "${BENTO_MCP_CACHEBUST:-}"
+        MEMOBENTO_REF: main
+        MAILBENTO_REF: main
+    restart: unless-stopped
+    environment:
+      BENTO_MANAGED: "1"
+      BENTO_MAIN: /app/dist/connector/main.js
+      CONNECTOR_PUBLIC_URL: "${CONNECTOR_PUBLIC_URL:-}"
+      CONNECTOR_ACCESS_AUD: "${CONNECTOR_ACCESS_AUD:-}"
+    ports:
+      # 루프백만. 밖으로는 터널이 내보낸다.
+      - "127.0.0.1:${CONNECTOR_PORT:-4010}:4010"
+    volumes:
+      # 설정은 읽기만 한다. 고치는 일은 메일함의 설정 화면이 한다.
+      - ./config:/config:ro
+      # 등록된 클라이언트와 토큰(해시)이 사는 곳.
+      - ./data/bentoconnector:/app/data
+      - ./src/LedgerBento/mcp:/opt/ledgerbento-mcp:ro
+    networks: [bento]
+    depends_on: [mailbento]
+
 networks:
   bento:
     driver: bridge
