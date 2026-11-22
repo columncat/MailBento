@@ -1,6 +1,7 @@
 import { NextResponse, type NextRequest } from "next/server";
 
 import { verifySession } from "@/lib/auth-crypto";
+import { AUTH_MISCONFIGURED_MESSAGE, authMode } from "@/lib/auth-mode";
 
 /**
  * Edge-runtime 미들웨어 — DB 접근 X, bcrypt X.
@@ -53,11 +54,36 @@ function unauthorized() {
   );
 }
 
-export async function middleware(req: NextRequest) {
-  // 인증 비활성 → 통과 (backward compat)
-  if (!process.env.AUTH_PASSWORD) return NextResponse.next();
+/**
+ * 인증 설정이 빠졌을 때의 응답.
+ *
+ * 예전에는 비밀번호가 없으면 그냥 통과시켰다. 설정 한 줄이 빠지는 것만으로
+ * 메일함이 로그인 없이 열리는 구조라, 이제는 반대로 닫는다(fail-closed).
+ * 로그인 화면도 내주지 않는다 — 받아 줄 비밀번호가 없으니 열어 봐야 소용없다.
+ * 일부러 잠그지 않는 설치는 `AUTH_DISABLED=1` 을 적는다(lib/auth-mode.ts).
+ */
+function misconfigured(pathname: string) {
+  const headers = { "cache-control": "no-store" };
+  if (isApi(pathname)) {
+    return NextResponse.json(
+      { error: AUTH_MISCONFIGURED_MESSAGE, code: "auth-misconfigured" },
+      { status: 503, headers },
+    );
+  }
+  return new NextResponse(AUTH_MISCONFIGURED_MESSAGE, {
+    status: 503,
+    headers: { ...headers, "content-type": "text/plain; charset=utf-8" },
+  });
+}
 
+export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+
+  const mode = authMode();
+  // 명시적으로 끈 설치만 통과시킨다.
+  if (mode === "off") return NextResponse.next();
+  if (mode === "misconfigured") return misconfigured(pathname);
+
   if (isPublic(pathname)) return NextResponse.next();
 
   // 1. 세션 쿠키 검증

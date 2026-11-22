@@ -6,11 +6,20 @@
 
 import bcrypt from "bcryptjs";
 
+import { authMode } from "./auth-mode";
 import { db, schema } from "./db";
 import { env } from "./env";
 
+/**
+ * 로그인을 요구하는가.
+ *
+ * `AUTH_DISABLED=1` 로 **명시적으로** 끈 경우만 false 다. 설정이 빠진 경우
+ * ("misconfigured")도 true 로 본다 — 여기서 false 를 돌려주면 로그인 화면이
+ * "인증 꺼짐" 으로 알고 대시보드로 보내 버린다. 그 상태의 요청은 미들웨어가
+ * 이미 503 으로 막고, 혹시 새어 들어와도 verifyPassword 가 false 를 준다.
+ */
 export function isAuthEnabled(): boolean {
-  return !!env.AUTH_PASSWORD;
+  return authMode() !== "off";
 }
 
 /** Plaintext 와 bcrypt 해시 둘 다 자동 감지. timing-safe 비교. */

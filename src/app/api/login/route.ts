@@ -16,7 +16,9 @@ import {
   verifyPassword,
 } from "@/lib/auth";
 import { encryptSession } from "@/lib/auth-crypto";
+import { AUTH_MISCONFIGURED_MESSAGE, authMode } from "@/lib/auth-mode";
 import {
+  FAIL_DELAY_MS,
   checkLoginAllowed,
   noteLoginFailure,
   noteLoginSuccess,
@@ -42,17 +44,20 @@ const bodySchema = z.object({
   remember: z.boolean().optional(),
 });
 
-/**
- * 실패에 딸리는 지연.
- *
- * 이 입구는 폼이 아니라서 무차별 대입이 훨씬 쉽다. 완전한 방어는 아니지만
- * 초당 시도 횟수를 눈에 띄게 깎는다.
- */
-const FAIL_DELAY_MS = 700;
-
 export async function POST(req: Request) {
+  /*
+   * 설정이 빠진 배포는 미들웨어가 이미 503 으로 막는다. 그래도 여기서 한 번 더
+   * 본다 — "인증 꺼짐" 과 "설정 빠짐" 을 섞어 authDisabled 를 돌려주면, MCP 같은
+   * 클라이언트가 쿠키 없이 진행해도 되는 줄 안다.
+   */
+  if (authMode() === "misconfigured") {
+    return NextResponse.json(
+      { error: AUTH_MISCONFIGURED_MESSAGE, code: "auth-misconfigured" },
+      { status: 503, headers: { "cache-control": "no-store" } },
+    );
+  }
   if (!isAuthEnabled()) {
-    // 인증이 꺼진 배포에서는 쿠키가 필요 없다. 클라이언트가 그대로 진행하면 된다.
+    // AUTH_DISABLED=1 로 일부러 끈 배포에서만 온다. 쿠키 없이 그대로 진행하면 된다.
     return NextResponse.json({ ok: true, authDisabled: true });
   }
 

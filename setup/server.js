@@ -123,7 +123,7 @@ const HTML = String.raw`<!doctype html>
   <form id="f">
     <section>
       <h2>접속 비밀번호</h2>
-      <p class="hint">메일함·메모함·논문함에 같이 씁니다. 비우면 <b>누구나 열 수 있는 상태</b>가 됩니다 — 집 안에서만 쓰고 밖으로 열지 않을 때만 비우세요.</p>
+      <p class="hint">메일함·메모함·논문함에 같이 씁니다. 비우면 <b>누구나 열 수 있는 상태</b>가 됩니다(설정에 <code>AUTH_DISABLED=1</code> 이 적힙니다) — 집 안에서만 쓰고 밖으로 열지 않을 때만 비우세요.</p>
       <label>비밀번호</label>
       <input type="password" name="password" autocomplete="new-password" placeholder="비워 두면 잠그지 않습니다">
       <label>한 번 더</label>
@@ -297,6 +297,15 @@ function save(input) {
   const shared = {
     AUTH_PASSWORD: password,
     AUTH_SECRET: password ? authSecret : "",
+    /*
+     * 비밀번호를 비운 설치는 "잠그지 않기로 했다" 고 **명시**해 둔다.
+     *
+     * 앱들은 비밀번호가 없으면 이제 모든 요청을 503 으로 거절한다(fail-closed).
+     * 설정 한 줄이 빠진 실수와 일부러 비운 선택을 가르려면 표시가 따로 있어야
+     * 하고, 그게 이 값이다. 이게 없으면 마법사를 거친 무비밀번호 설치가 다음
+     * 기동에서 스스로를 잠근다. 비밀번호가 있으면 적지 않는다(envFile 이 빈 값을 뺀다).
+     */
+    AUTH_DISABLED: password ? "" : "1",
     AGENT_URL,
     AGENT_TOKEN: agentToken,
   };

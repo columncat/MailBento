@@ -261,11 +261,12 @@ function parsedAddrToMailAddr(
 // ─────────────────────────────────────────────────────────────
 
 /**
- * mailparser 가 실제로 채워 주는 `partId` 가 @types/mailparser 에는 없다
- * (mail-parser.js 의 경계 카운터가 만든다). 있으면 쓰고 없으면 없는 대로 —
- * 어차피 서버가 준 번호와 맞을 때만 믿는 값이다.
+ * mailparser 가 실제로 채워 주는 `partId` 가 예전 @types/mailparser 에는 없었다
+ * (mail-parser.js 의 경계 카운터가 만든다). 3.15 부터는 패키지가 직접 타입을 싣고
+ * `string | null` 로 적는다. 두 판 모두 받도록 null 까지 열어 둔다 — 있으면 쓰고
+ * 없으면 없는 대로, 어차피 서버가 준 번호와 맞을 때만 믿는 값이다.
  */
-type ParsedAttachment = Attachment & { partId?: string };
+type ParsedAttachment = Omit<Attachment, "partId"> & { partId?: string | null };
 
 /** IMAP 이 말해 준 조각 하나. 파서가 본 것이 아니라 **서버가 말한** 구조다. */
 interface PartNode {

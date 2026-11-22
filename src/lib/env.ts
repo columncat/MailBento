@@ -11,7 +11,8 @@ const envSchema = z.object({
   MESSAGES_PER_BOX: z.coerce.number().int().positive().max(50).default(15),
 
   /**
-   * 인증 설정 — 둘 다 비우면 인증 비활성 (앱 그대로 공개).
+   * 인증 설정 — 둘 다 있어야 켜진다. 하나라도 비면 **모든 요청을 503 으로 거절**한다.
+   * 일부러 잠그지 않으려면 AUTH_DISABLED=1 을 함께 적는다 (lib/auth-mode.ts).
    * - AUTH_PASSWORD: plaintext 또는 bcrypt 해시 ($2a$ / $2b$ 시작). 둘 다 자동 감지.
    *   bcrypt 해시 생성: `npx bcrypt-cli "내비밀번호"` 또는 온라인 도구.
    * - AUTH_SECRET: 세션 쿠키 암호화 키 (32바이트 base64).
@@ -20,6 +21,8 @@ const envSchema = z.object({
    */
   AUTH_PASSWORD: z.string().optional(),
   AUTH_SECRET: z.string().optional(),
+  /** "1" 일 때만 인증을 끈다. 다른 값은 무시한다 — "0"·"false" 가 끄는 뜻으로 읽히면 안 된다. */
+  AUTH_DISABLED: z.string().optional(),
 
   /**
    * MemoBento 로 건너가는 헤더 버튼의 주소 (선택).

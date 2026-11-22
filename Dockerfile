@@ -1,7 +1,11 @@
 # syntax=docker/dockerfile:1
 
 # ── 베이스 (glibc) — better-sqlite3 prebuild 사용 가능 ──
-FROM node:20-slim AS base
+# node 20 은 2026-04 에 수명이 끝났다. 22 로 올리면서 데비안 판도 bookworm 으로
+# 못 박는다 — `22-slim` 은 데비안 기본판이 바뀌면 조용히 따라가고, 그러면 같은
+# Dockerfile 이 빌드하는 날마다 다른 glibc 를 받는다. VoiceBento·BentoAgent 가 이미
+# 이 조합(22-bookworm-slim + better-sqlite3 11.10)으로 운영 중이다.
+FROM node:22-bookworm-slim AS base
 ENV NEXT_TELEMETRY_DISABLED=1
 WORKDIR /app
 

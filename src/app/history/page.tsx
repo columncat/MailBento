@@ -12,7 +12,7 @@ export default async function HistoryPage() {
     return (
       <main className="mx-auto max-w-[640px] px-6 py-16 text-center">
         <p className="text-sm text-(--color-fg-3)">
-          인증이 비활성 상태입니다 (.env.local 에 AUTH_PASSWORD 설정 시 활성화).
+          인증이 꺼져 있습니다 (AUTH_DISABLED=1). AUTH_PASSWORD 와 AUTH_SECRET 을 넣고 AUTH_DISABLED 를 지우면 켜집니다.
         </p>
         <Link
           href="/"
