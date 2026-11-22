@@ -18,8 +18,40 @@ chmod +x bootstrap.sh
 (에이전트 이미지가 Claude Code CLI 를 통째로 설치하고, 음성함이 쓸 전사 모델
 487MB 를 함께 받는다).
 
-끝나면 브라우저로 **`http://<이 기계 주소>:3000`** 을 연다. 설치 마법사가
-떠 있다. 값을 채우고 저장하면 여섯 서비스가 차례로 올라온다.
+빌드가 끝나면 `./bootstrap.sh` 가 설치 마법사를 띄우고 **기다린다.** 마법사는
+이 기계의 **`127.0.0.1:3000`** 에만 열린다 — 인증 없이 모든 비밀(Claude 토큰,
+Discord 토큰, 비밀번호)을 받아 적는 화면이라, 같은 공유기 아래 누구든 먼저
+채울 수 있는 자리에 두지 않는다. 다른 기계의 브라우저에서 열려면 ssh 로 포트를
+끌어온다:
+
+```sh
+ssh -L 3000:127.0.0.1:3000 <계정>@<이 기계 주소>
+# 그리고 브라우저로 http://localhost:3000
+```
+
+값을 채우고 저장하면 마법사가 스스로 끝나고, `./bootstrap.sh` 가 이어서 여섯
+서비스를 띄운다.
+
+### 마법사를 다시 돌리려면
+
+compose 로는 마법사가 뜨지 않는다. 앱들은 `config/` 에서 **제 파일 한 장씩만**
+읽기 전용으로 받는데(아래 "설정은 앱마다 제 것만"), 그 파일이 없으면 compose 가
+컨테이너를 아예 만들지 않는다. 처음부터 다시 쓰려면 `config/setup.json` 을 다른
+이름으로 옮겨 두고 `./bootstrap.sh` 를 다시 돌리거나, 손으로 띄운다:
+
+```sh
+docker-compose stop
+mv config/setup.json config/setup.json.old   # 있으면 마법사 대신 앱이 뜬다
+docker run --rm --init -e BENTO_MANAGED=1 -p 127.0.0.1:3000:3000 \
+  -v "$PWD/config:/config" mailbento-mailbento    # 저장하면 스스로 끝난다
+docker-compose up -d
+```
+
+마법사를 중간에 끊어 `setup.json` 이 없으면 `up` 이 컨테이너를 띄우지 못한다
+(일부러 그렇다). 옮겨 둔 `setup.json.old` 를 되돌리면 예전 설정으로 돌아온다.
+
+마법사만은 `./config` 를 **쓰기로 통째로** 물려야 한다 — 여섯 앱의 설정을 모두
+거기 적기 때문이다. 이미지 이름은 `docker-compose config --images mailbento` 가 말한다.
 
 ### 장부함은 비공개 저장소다
 
@@ -122,6 +154,7 @@ bento/
     voice-models/  전사 모델 (bootstrap.sh 가 받는다, 671MB)
     bentoagent/    세션 · 예약 · 기록
     claude-home/   대화 기록
+    bentoconnector/ Claude 웹 커넥터의 클라이언트 · 토큰(해시)
   src/           받아 둔 저장소 (빌드에 쓴다)
 ```
 
@@ -142,8 +175,12 @@ LEDGERBENTO_PORT=3004
 AGENT_PORT=4000
 ```
 
-에이전트 포트는 `127.0.0.1` 에만 열린다. 앱들은 네트워크 안에서 서비스
-이름으로 부르므로 이 포트가 없어도 채팅창은 돈다.
+**포트는 전부 `127.0.0.1` 에만 열린다** (앱 다섯도, 2026-11-22 부터). 예전에는
+앱 다섯이 `0.0.0.0` 에 열려 있어서, 같은 공유기 아래 누구든 터널 앞의 인증
+(Cloudflare Access)을 건너뛰고 앱에 바로 닿았다. 앱들은 `bento` 네트워크 안에서
+서비스 이름으로 서로를 부르므로 호스트 포트와 무관하고, 터널(cloudflared)은
+같은 기계에서 `127.0.0.1` 로 부른다. 집 안의 다른 기계에서 IP:포트로 바로 열던
+사람은 이제 터널 주소로 가거나 `ssh -L 3001:127.0.0.1:3001 …` 처럼 끌어온다.
 
 한 도메인을 경로로 나눠 쓸 거라면 포트 대신
 [cloudflare-ingress.md](cloudflare-ingress.md) 를 본다. 거기 `BASE_PATH` 는
@@ -191,3 +228,47 @@ docker compose restart voicebento
 `sherpa-onnx-nemo-parakeet-tdt-0.6b-v3-int8/tokens.txt` 와 `silero_vad.onnx` 가
 둘 다 있어야 한다. 없으면 `./bootstrap.sh` 를 다시 돌린다 — 받다 끊긴 것은
 버리고 다시 받는다.
+
+## 설정은 앱마다 제 것만
+
+각 앱은 `config/<앱>.env` 와 `config/setup.json` **두 파일만, 읽기 전용으로**
+받는다. 예전에는 `./config` 를 통째로 물려서, 앱 하나가 뚫리면 나머지 다섯의
+비밀(암호화 키, Claude 토큰, Discord 토큰, 비밀번호)까지 다 읽혔다.
+
+예외는 에이전트의 `bentoagent.env` 하나다. 메일함 **설정 → 에이전트** 에서 Claude
+토큰이나 Discord 를 바꾸면 에이전트가 이 파일을 제자리에 고쳐 쓰고 다시 뜬다.
+그래서 이 파일만 에이전트에게 쓰기로 열려 있다. 커넥터는 같은 파일을 읽기만 한다.
+
+한 파일 마운트는 파일의 inode 를 붙든다. 호스트에서 편집기로 고치면 편집기가
+새 파일을 만들어 바꿔치기할 수 있는데, 그러면 해당 컨테이너는 다시 만들기
+(`docker-compose up -d --force-recreate <서비스>`) 전까지 옛 내용을 본다.
+
+## 컨테이너를 단단히
+
+모든 서비스에 `no-new-privileges`, `cap_drop: [ALL]`, 프로세스 수 상한
+(`pids_limit`), 로그 크기 상한(10MB × 5)이 걸려 있다. 앱들은 원래 uid 1001 로
+돌고 진입 스크립트가 chown·su 를 하지 않으므로 잃는 것이 없다.
+
+**에이전트와 커넥터도 uid 1001 로, 읽기 전용 루트 파일시스템 위에서 돈다**
+(2026-11-22 전에는 root 였다). 쓸 수 있는 곳은 `data/` 볼륨, `/tmp`(tmpfs),
+`/home/agent`(tmpfs — 그 위에 `data/claude-home` 이 `.claude` 로 얹힌다)뿐이다.
+에이전트는 남이 쓴 메일·논문을 읽는 모델을 띄우고 `/unlock` 이면 그 모델에게
+셸까지 주므로, root 일 이유가 없다. 대신 `/unlock` 의 셸로는 패키지를 깔거나
+이미지 안의 파일을 고칠 수 없다.
+
+root 시절에 만든 파일을 넘기는 일은 한 번만 하면 된다:
+
+```sh
+docker-compose stop bentoagent bentoconnector
+bash src/MailBento/deploy/migrate-nonroot.sh      # data/bentoagent · claude-home · bentoconnector → 1001
+docker-compose up -d bentoagent bentoconnector
+```
+
+여러 번 돌려도 같고, `./bootstrap.sh` 도 돌 때마다 같은 일을 한다.
+
+**`cap_drop` 은 `docker-compose run` 에도 따라온다.** 그래서
+`docker-compose run --rm --no-deps --user 0 --entrypoint sh <서비스> -c 'chown …'`
+은 이제 `Operation not permitted` 로 실패한다. 소유를 고칠 때는
+`--cap-add CHOWN --cap-add DAC_OVERRIDE --cap-add FOWNER` 를 붙이거나,
+`bootstrap.sh` 처럼 이미지를 `docker run` 으로 따로 띄운다. 설정 파일은 서비스에
+읽기 전용으로만 물려 있으니, 고칠 때도 `-v "$PWD/config:/config"` 로 따로 물린다.

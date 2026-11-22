@@ -3,7 +3,9 @@
 #
 # 처음 한 번:
 #   ./bootstrap.sh
-#   브라우저로 http://<주소>:3000 → 설치 마법사
+#   → 설치 마법사가 이 기계의 127.0.0.1:3000 에 뜨고 이 스크립트가 기다린다.
+#     다른 기계에서 열려면: ssh -L 3000:127.0.0.1:3000 <계정>@<이 기계>
+#     그리고 브라우저로 http://localhost:3000
 #
 # 나중에 갱신할 때도 같은 명령이다. 설정과 데이터는 ./config, ./data 에
 # 있으므로 다시 빌드해도 남는다.
@@ -295,29 +297,69 @@ build_ledger_mcp || echo "  장부함 MCP 를 짓지 못했습니다. 에이전�
 echo "── 빌드"
 $COMPOSE build
 
-# 앱들은 컨테이너 안에서 nodejs(uid 1001)로 돈다. 그런데 여기서 만든 폴더는
-# 이 계정(대개 uid 1000) 소유라, 그대로 두면 앱이 설정을 읽지도 데이터를
-# 쓰지도 못한다. 호스트에 sudo 가 없어도 되도록 컨테이너 안에서 바로잡는다.
+# 앱들은 컨테이너 안에서 nodejs(uid 1001)로 돈다. 에이전트와 커넥터도 이제
+# 1001 이다 (2026-11-22 전에는 root). 그런데 여기서 만든 폴더는 이 계정(대개
+# uid 1000) 소유라, 그대로 두면 앱이 설정을 읽지도 데이터를 쓰지도 못한다.
+# 호스트에 sudo 가 없어도 되도록 컨테이너 안에서 바로잡는다.
+#
+# **compose 서비스로 돌리지 않고 이미지를 `docker run` 으로 따로 띄운다.**
+#   - 서비스에는 `cap_drop: [ALL]` 이 걸려 있어 `--user 0` 으로 돌려도 CHOWN
+#     권한이 없다.
+#   - 설정은 앱마다 한 파일씩 읽기 전용으로 물리므로, 서비스로는 ./config 전체에
+#     닿지 못한다. 처음 설치 때는 그 파일들이 아직 없어 컨테이너가 만들어지지도
+#     않는다.
+# 메일함 이미지를 쓰는 것은 방금 빌드해서 반드시 있고 sh·chown 이 들어 있어서다.
+MAIL_IMG="$($COMPOSE config --images mailbento 2>/dev/null | grep -- '-mailbento$' | head -n1 || true)"
+MAIL_IMG="${MAIL_IMG:-mailbento-mailbento}"
+
 echo "── 권한 맞추기"
-$COMPOSE run --rm --no-deps --user 0 --entrypoint sh mailbento \
-  -c 'chown -R 1001:1001 /config /app/data' >/dev/null
-$COMPOSE run --rm --no-deps --user 0 --entrypoint sh memobento \
-  -c 'chown -R 1001:1001 /app/data' >/dev/null
-$COMPOSE run --rm --no-deps --user 0 --entrypoint sh paperbento \
-  -c 'chown -R 1001:1001 /app/data' >/dev/null
-# 모델 볼륨(/models)은 읽기 전용이라 여기 끼지 않는다. 위에서 chmod 로 열어 둔다.
-$COMPOSE run --rm --no-deps --user 0 --entrypoint sh voicebento \
-  -c 'chown -R 1001:1001 /app/data' >/dev/null
-$COMPOSE run --rm --no-deps --user 0 --entrypoint sh ledgerbento \
-  -c 'chown -R 1001:1001 /app/data' >/dev/null
+# voice-models 는 끼지 않는다 — 읽기 전용으로 물리고 위에서 chmod 로 열어 둔다.
+docker run --rm --user 0 --entrypoint sh \
+  -v "$PWD/config:/s/config" -v "$PWD/data:/s/data" "$MAIL_IMG" -c '
+    for d in mailbento memobento paperbento voicebento ledgerbento \
+             bentoagent claude-home bentoconnector; do
+      mkdir -p "/s/data/$d" 2>/dev/null || true
+    done
+    chown -hR 1001:1001 /s/config /s/data/mailbento /s/data/memobento \
+      /s/data/paperbento /s/data/voicebento /s/data/ledgerbento \
+      /s/data/bentoagent /s/data/claude-home /s/data/bentoconnector
+  ' >/dev/null
+
+# ── 설치 마법사 ──
+#
+# compose 로는 마법사가 뜨지 않는다. 앱들은 설정 파일을 한 장씩 물리는데, 그
+# 파일이 없으면 compose 가 컨테이너를 아예 만들지 않기 때문이다 (docker-compose.yml
+# 맨 위 설명). 그래서 처음 한 번은 여기서 메일함 이미지를 **./config 를 쓰기로
+# 통째로 물려** 띄우고, 마법사가 값을 다 적고 스스로 끝날 때까지 기다린다.
+#
+# 127.0.0.1 에만 연다. 마법사에는 인증이 없고 모든 비밀을 받아 적는다 — LAN 에
+# 열어 두면 같은 공유기 아래 누구든 먼저 채워 넣을 수 있다.
+if [ ! -f config/setup.json ]; then
+  port="${MAILBENTO_PORT:-3000}"
+  echo
+  echo "── 설치 마법사"
+  echo "  이 기계의 127.0.0.1:${port} 에 열립니다. 다른 기계의 브라우저에서 열려면:"
+  echo "    ssh -L ${port}:127.0.0.1:${port} <계정>@<이 기계 주소>"
+  echo "  그리고 http://localhost:${port} 를 여세요. 저장하면 여기서 이어집니다."
+  echo
+  # 이미 돌던 스택에서 setup.json 만 옮겨 두고 다시 설치하는 경우, 메일함이 같은
+  # 포트를 쥐고 있어 마법사가 못 뜬다. 설정을 통째로 다시 쓰는 참이니 먼저 멈춘다
+  # (처음 설치에서는 멈출 것이 없다).
+  $COMPOSE stop >/dev/null 2>&1 || true
+  docker run --rm --init --name MailBento-setup \
+    -e BENTO_MANAGED=1 \
+    -p "127.0.0.1:${port}:3000" \
+    -v "$PWD/config:/config" \
+    "$MAIL_IMG"
+  if [ ! -f config/setup.json ]; then
+    echo "설치 마법사가 끝나지 않았습니다. ./bootstrap.sh 를 다시 돌리세요." >&2
+    exit 1
+  fi
+fi
 
 echo "── 시작"
 $COMPOSE up -d
 
 echo
-if [ -f config/setup.json ]; then
-  echo "이미 설정돼 있습니다. 그대로 올라옵니다."
-else
-  port="${MAILBENTO_PORT:-3000}"
-  echo "설치 마법사가 열려 있습니다 — 브라우저로 http://<이 기계 주소>:${port} 를 여세요."
-fi
+echo "올라왔습니다. 앱들은 127.0.0.1 에만 열려 있습니다 — 밖에서는 터널 주소로,"
+echo "이 기계 밖의 집 안 기계에서는 ssh -L 로 끌어와서 엽니다."

@@ -4,8 +4,63 @@
 #
 #   ./bootstrap.sh          저장소를 받아 다섯 컨테이너를 띄운다
 #
-# 그리고 브라우저로 http://<주소>:3000 을 열면 설치 마법사가 뜬다. 거기서
-# 값을 채우면 다섯 서비스가 이어서 올라온다.
+# 처음 한 번은 bootstrap.sh 가 설치 마법사를 띄우고 기다린다. 마법사는 이
+# 기계의 127.0.0.1:3000 에만 열리므로 다른 기계의 브라우저에서는 ssh 로
+# 포트를 끌어와서 연다:
+#
+#   ssh -L 3000:127.0.0.1:3000 <계정>@<이 기계>     # 그리고 http://localhost:3000
+#
+# 거기서 값을 채우면 마법사가 끝나고 bootstrap.sh 가 나머지를 띄운다.
+#
+# ── 포트는 전부 127.0.0.1 에만 연다 ──
+#
+# 예전에는 앱 다섯이 0.0.0.0 에 열려 있었다. 그러면 같은 공유기 아래의 누구든
+# 터널 앞의 인증(Cloudflare Access)을 건너뛰고 앱에 바로 닿는다 — 앱 로그인과,
+# 로그인이 안 걸린 `_next/image` 까지. 밖으로는 터널(cloudflared)이 127.0.0.1
+# 로 부르므로 루프백만으로 충분하고, 앱끼리는 bento 네트워크 안에서 서비스
+# 이름으로 부르므로 호스트 포트와 무관하다. 집 안에서 IP:포트로 바로 열던
+# 사람은 이제 터널 주소로 가거나 ssh -L 로 끌어와야 한다.
+#
+# ── 설정은 앱마다 제 것만, 읽기 전용으로 ──
+#
+# ./config 를 통째로 물리면 모든 앱이 모든 앱의 비밀(암호화 키, Claude 토큰,
+# Discord 토큰, 각 앱 비밀번호)을 읽는다 — 하나가 뚫리면 여섯이 다 샌다. 그래서
+# 각자 `<앱>.env` 와 `setup.json` 두 파일만, 읽기 전용으로 받는다. 예외는
+# 에이전트 하나다: 메일함 설정 화면에서 Claude 토큰·Discord 를 바꾸면 에이전트가
+# 제 bentoagent.env 를 **제자리에서** 고쳐 쓴다(selfconfig.ts 의 writeFileSync —
+# 같은 inode 라 한 파일 마운트로도 된다). 그 파일만 쓰기를 열어 둔다.
+#
+# 이 마운트들은 긴 문법에 `create_host_path: false` 다. 짧은 문법은 원본이
+# 없으면 도커가 그 자리에 **빈 폴더**를 만들어 버린다 — setup.json 이 폴더가
+# 되면 진입 스크립트는 "설치 안 됨" 으로 보고 마법사를 열고, 마법사는 그 폴더에
+# 파일을 못 써서 영영 고장 난다. 긴 문법은 원본이 없으면 컨테이너를 아예 안
+# 만든다. 그래서 **compose 로는 설치 마법사가 뜨지 않는다** (설정이 없으면
+# 만들기 자체가 실패한다). 마법사는 bootstrap.sh 가 따로 띄운다.
+#
+# 마법사를 다시 돌려야 하면(설정을 처음부터 다시 쓰기) config/setup.json 을
+# 옮겨 두고 ./bootstrap.sh 를 돌리거나, 스택을 멈추고 손으로 띄운다 —
+# 메일함 이미지에 ./config 를 **쓰기로** 통째로 물려야 한다:
+#
+#   docker-compose stop
+#   mv config/setup.json config/setup.json.old    # 있으면 마법사 대신 앱이 뜬다
+#   docker run --rm --init -e BENTO_MANAGED=1 -p 127.0.0.1:3000:3000 \
+#     -v "$PWD/config:/config" mailbento-mailbento     # 저장하면 스스로 끝난다
+#   docker-compose up -d
+#
+# (이미지 이름은 `docker-compose config --images mailbento` 가 말한다.) 마법사를
+# 중간에 끊어 setup.json 이 없으면 up 이 컨테이너를 못 띄운다 — 옮겨 둔 것을
+# 되돌리면 예전 설정으로 돌아온다.
+#
+# ── 컨테이너 공통 단단히 하기 (x-hardening) ──
+#
+# 권한 상승 금지(no-new-privileges), 커널 권한 전부 버리기(cap_drop: ALL),
+# 프로세스 수 상한, 로그 크기 상한. 앱들은 이미 uid 1001 로 돌고 진입 스크립트도
+# chown·su 를 하지 않으므로 버려서 잃는 것이 없다.
+#
+# 주의: cap_drop 은 `docker-compose run --user 0 <서비스>` 에도 따라온다. 그래서
+# 예전의 "compose run 으로 chown" 은 CHOWN 권한이 없어 실패한다. 소유를 고칠 때는
+# `--cap-add CHOWN --cap-add DAC_OVERRIDE --cap-add FOWNER` 를 붙이거나,
+# bootstrap.sh / migrate-nonroot.sh 처럼 이미지를 `docker run` 으로 따로 띄운다.
 #
 # 빌드 자리를 ./src 로 두는 이유는 BentoAgent 가 비공개 저장소이기 때문이다.
 # 도커에게 git 주소를 그대로 주면 도커가 스스로 받아야 하는데, 그러려면
@@ -14,10 +69,39 @@
 
 name: MailBento
 
+# 로그는 json-file 기본값이 상한 없이 쌓인다. 에이전트는 대화마다 줄을 남기므로
+# 몇 달이면 디스크를 먹는다. 10MB × 5 면 서비스당 50MB 가 끝이다.
+x-logging: &logging
+  driver: json-file
+  options:
+    max-size: "10m"
+    max-file: "5"
+
+x-hardening: &hardening
+  security_opt: ["no-new-privileges:true"]
+  cap_drop: [ALL]
+  # 평소 11개 남짓이다(2026-11 docker stats). 512 는 넉넉한 선이고, 넘으면 무언가
+  # 포크를 멈추지 못하는 것이므로 그때 기계 전체가 멎는 것보다 이 컨테이너만
+  # 막히는 편이 낫다.
+  pids_limit: 512
+  logging: *logging
+
+# 설치가 끝났다는 표시. 모든 컨테이너의 진입 스크립트가 이 파일이 있는지 본다.
+x-setup-done: &setup-done
+  type: bind
+  source: ./config/setup.json
+  target: /config/setup.json
+  read_only: true
+  bind: { create_host_path: false }
+
 services:
-  # 3000 번. 사람이 처음 닿는 곳이라 설치 마법사도 여기서 뜬다.
+  # 3000 번. 사람이 처음 닿는 곳이다. 설치 마법사도 이 이미지에 들어 있지만
+  # compose 로는 뜨지 않는다 — 설정 파일이 없으면 위 마운트가 컨테이너 만들기를
+  # 막는다 (맨 위 설명). /config 폴더 자체는 이미지 안의 1001 소유 빈 폴더라
+  # 진입 스크립트의 "쓸 수 있나" 검사도 그대로 통과한다.
   mailbento:
     container_name: MailBento
+    <<: *hardening
     build:
       context: ./src/MailBento
       args:
@@ -29,15 +113,22 @@ services:
       # 예전 방식(환경변수 직접 주입)으로 보고 앱을 바로 띄운다.
       BENTO_MANAGED: "1"
     ports:
-      - "${MAILBENTO_PORT:-3000}:3000"
+      # 루프백만. 밖으로는 터널이 내보낸다 (맨 위 설명).
+      - "127.0.0.1:${MAILBENTO_PORT:-3000}:3000"
     volumes:
-      - ./config:/config
+      - type: bind
+        source: ./config/mailbento.env
+        target: /config/mailbento.env
+        read_only: true
+        bind: { create_host_path: false }
+      - *setup-done
       - ./data/mailbento:/app/data
     networks: [bento]
 
   # 3001 번(안에서는 3000). 메모·파일이 사는 곳.
   memobento:
     container_name: MemoBento
+    <<: *hardening
     build:
       context: ./src/MemoBento
       args:
@@ -48,9 +139,15 @@ services:
       # 예전 방식(환경변수 직접 주입)으로 보고 앱을 바로 띄운다.
       BENTO_MANAGED: "1"
     ports:
-      - "${MEMOBENTO_PORT:-3001}:3000"
+      # 루프백만. 밖으로는 터널이 내보낸다 (맨 위 설명).
+      - "127.0.0.1:${MEMOBENTO_PORT:-3001}:3000"
     volumes:
-      - ./config:/config
+      - type: bind
+        source: ./config/memobento.env
+        target: /config/memobento.env
+        read_only: true
+        bind: { create_host_path: false }
+      - *setup-done
       - ./data/memobento:/app/data
       # 메일함의 DB 를 그대로 본다. Corkboard 와 Memo 메모함은 두 앱이 같은
       # 자료를 쓰기 때문에, 이 마운트가 없으면 한쪽에서 고친 것이 다른 쪽에
@@ -65,6 +162,7 @@ services:
   # 요약도 메모도 전부 이 앱이 소유하는 행이라 자기 볼륨 하나면 된다.
   paperbento:
     container_name: PaperBento
+    <<: *hardening
     build:
       context: ./src/PaperBento
       args:
@@ -75,9 +173,15 @@ services:
       # 예전 방식(환경변수 직접 주입)으로 보고 앱을 바로 띄운다.
       BENTO_MANAGED: "1"
     ports:
-      - "${PAPERBENTO_PORT:-3002}:3000"
+      # 루프백만. 밖으로는 터널이 내보낸다 (맨 위 설명).
+      - "127.0.0.1:${PAPERBENTO_PORT:-3002}:3000"
     volumes:
-      - ./config:/config
+      - type: bind
+        source: ./config/paperbento.env
+        target: /config/paperbento.env
+        read_only: true
+        bind: { create_host_path: false }
+      - *setup-done
       - ./data/paperbento:/app/data
     networks: [bento]
     depends_on: [mailbento]
@@ -94,6 +198,7 @@ services:
   # 다시 민다. bootstrap.sh 가 볼륨에 채워 두고 여기서는 읽기만 한다.
   voicebento:
     container_name: VoiceBento
+    <<: *hardening
     build:
       context: ./src/VoiceBento
       args:
@@ -129,9 +234,15 @@ services:
       # 안 적는다 — 그래서 이미 설치된 스택도 설정을 안 고치고 분리를 갖는다.
       DIAR_MODEL_DIR: /models
     ports:
-      - "${VOICEBENTO_PORT:-3003}:3000"
+      # 루프백만. 밖으로는 터널이 내보낸다 (맨 위 설명).
+      - "127.0.0.1:${VOICEBENTO_PORT:-3003}:3000"
     volumes:
-      - ./config:/config
+      - type: bind
+        source: ./config/voicebento.env
+        target: /config/voicebento.env
+        read_only: true
+        bind: { create_host_path: false }
+      - *setup-done
       - ./data/voicebento:/app/data
       # 읽기 전용 — 앱이 모델을 고칠 일이 없고, 실수로 지우는 일도 막는다.
       # 안에서 chown 을 못 하므로 bootstrap.sh 가 호스트에서 열어 둔다.
@@ -147,6 +258,7 @@ services:
   # 일도 없다 — 장부의 자료는 전부 사람이 적은 숫자와 날짜다.
   ledgerbento:
     container_name: LedgerBento
+    <<: *hardening
     build:
       context: ./src/LedgerBento
       args:
@@ -157,9 +269,15 @@ services:
       # 예전 방식(환경변수 직접 주입)으로 보고 앱을 바로 띄운다.
       BENTO_MANAGED: "1"
     ports:
-      - "${LEDGERBENTO_PORT:-3004}:3000"
+      # 루프백만. 밖으로는 터널이 내보낸다 (맨 위 설명).
+      - "127.0.0.1:${LEDGERBENTO_PORT:-3004}:3000"
     volumes:
-      - ./config:/config
+      - type: bind
+        source: ./config/ledgerbento.env
+        target: /config/ledgerbento.env
+        read_only: true
+        bind: { create_host_path: false }
+      - *setup-done
       - ./data/ledgerbento:/app/data
     networks: [bento]
     depends_on: [mailbento]
@@ -171,6 +289,26 @@ services:
   # 기계에서 손으로 확인할 때를 위해서다.
   bentoagent:
     container_name: BentoAgent
+    <<: *hardening
+    # 에이전트는 claude 와 MCP 넷을 자식으로 띄우고, 채팅·검토·알림이 겹치면
+    # 그 묶음이 여러 벌 뜬다. 앱들보다 선을 넉넉히 둔다.
+    pids_limit: 1024
+    # root 로 돌지 않는다 (2026-11-22). 남이 쓴 메일·논문을 읽는 모델을 띄우고
+    # `/unlock` 이면 그 모델에게 셸까지 주는 프로세스라, root 면 컨테이너 안의
+    # 무엇이든 고칠 수 있었다. 1001 인 까닭은 config/*.env 가 늘 1001 소유
+    # 0600 이기 때문이다 (Dockerfile 의 USER 와 같은 값이어야 한다).
+    #
+    # 처음 바꾸는 날에는 예전에 root 가 만든 data/bentoagent·data/claude-home 을
+    # 1001 로 넘겨야 한다 — deploy/migrate-nonroot.sh.
+    user: "1001:1001"
+    # 루트 파일시스템은 읽기 전용. 쓸 수 있는 곳은 아래 tmpfs 둘과 볼륨뿐이다.
+    read_only: true
+    tmpfs:
+      # claude 의 MCP 설정 파일, 첨부 임시 폴더, CLI 자신의 소켓·임시 파일.
+      - /tmp:size=512m,mode=1777
+      # claude 가 홈에 적는 것(.claude.json, .cache). 재시작마다 비지만 온보딩·
+      # 캐시뿐이다. 대화 기록은 아래 ./data/claude-home 바인드가 이 위에 얹혀 남는다.
+      - /home/agent:size=256m,uid=1001,gid=1001,mode=0700
     build:
       context: ./src/BentoAgent
       args:
@@ -190,7 +328,15 @@ services:
     ports:
       - "127.0.0.1:${AGENT_PORT:-4000}:4000"
     volumes:
-      - ./config:/config
+      # 이 파일만 쓰기를 연다 — 메일함 설정 화면에서 바꾼 Claude 토큰·Discord 를
+      # 에이전트가 여기 제자리에 다시 적고 스스로 다시 뜬다 (맨 위 설명).
+      # 호스트에서 편집기로 고치면 편집기가 파일을 새로 만들어 inode 가 바뀔 수
+      # 있는데, 그러면 이 컨테이너를 다시 만들기 전까지 옛 내용을 본다.
+      - type: bind
+        source: ./config/bentoagent.env
+        target: /config/bentoagent.env
+        bind: { create_host_path: false }
+      - *setup-done
       - ./data/bentoagent:/app/data
       # 대화 자체는 claude 가 자기 홈에 적는다. 밖에 둬야 다시 빌드해도
       # 하던 얘기가 남는다.
@@ -218,6 +364,16 @@ services:
   bentoconnector:
     container_name: BentoConnector
     profiles: [connector]
+    <<: *hardening
+    # 에이전트와 같은 이미지·같은 계정. 인터넷이 직접 부르는 자리라 더더욱 root 일
+    # 이유가 없다. 쓰는 곳은 /app/data(connector.json) 와 /tmp 뿐이다.
+    user: "1001:1001"
+    read_only: true
+    tmpfs:
+      # /up/<토큰> 으로 받는 파일이 여기 잠깐 머문다 — 한 번에 95MB 까지, 몇 개가
+      # 겹칠 수 있어 512MB.
+      - /tmp:size=512m,mode=1777
+      - /home/agent:size=256m,uid=1001,gid=1001,mode=0700
     build:
       context: ./src/BentoAgent
       args:
@@ -234,8 +390,13 @@ services:
       # 루프백만. 밖으로는 터널이 내보낸다.
       - "127.0.0.1:${CONNECTOR_PORT:-4010}:4010"
     volumes:
-      # 설정은 읽기만 한다. 고치는 일은 메일함의 설정 화면이 한다.
-      - ./config:/config:ro
+      # 설정은 읽기만 한다. 에이전트와 같은 파일을 본다 (고치는 쪽은 에이전트).
+      - type: bind
+        source: ./config/bentoagent.env
+        target: /config/bentoagent.env
+        read_only: true
+        bind: { create_host_path: false }
+      - *setup-done
       # 등록된 클라이언트와 토큰(해시)이 사는 곳.
       - ./data/bentoconnector:/app/data
       - ./src/LedgerBento/mcp:/opt/ledgerbento-mcp:ro
