@@ -131,10 +131,7 @@ export function AgentPrefsPanel() {
 
   return (
     <section className="rounded-[var(--radius-card)] bg-(--color-surface) p-6 ring-1 ring-(--color-border-soft)">
-      <h2 className="mb-1 text-lg font-medium text-(--color-fg)">알림과 안내문</h2>
-      <p className="mb-4 text-sm break-keep text-(--color-fg-4)">
-        저장하면 다음 요청부터 바로 적용됩니다. 에이전트가 다시 시작하지 않습니다.
-      </p>
+      <h2 className="mb-4 text-lg font-medium text-(--color-fg)">알림과 안내문</h2>
 
       {err && (
         <p className="mb-4 rounded-lg bg-(--color-danger)/15 px-3 py-2 text-[13px] break-keep text-(--color-danger)">
@@ -149,13 +146,7 @@ export function AgentPrefsPanel() {
 
       {/* ── 메일 알림 ── */}
       <div className="flex items-start justify-between gap-4">
-        <div>
-          <h3 className="text-sm font-medium text-(--color-fg)">새 메일 Discord 알림</h3>
-          <p className="mt-1 text-[13px] break-keep text-(--color-fg-4)">
-            새 메일의 제목만 보고 읽어 볼 만한 것을 골라 Discord 로 물어봅니다. 끄면 고르는
-            일도 하지 않습니다. Discord 자체가 꺼져 있으면 이 스위치와 상관없이 묻지 않습니다.
-          </p>
-        </div>
+        <h3 className="text-sm font-medium text-(--color-fg)">새 메일 Discord 알림</h3>
         <button
           type="button"
           role="switch"
@@ -183,18 +174,13 @@ export function AgentPrefsPanel() {
         </button>
       </div>
 
-      <div className="mt-4 flex items-baseline justify-between gap-3">
+      <div className="mt-4 mb-1.5 flex items-baseline justify-between gap-3">
         <label htmlFor="triage-criteria" className="text-[13px] text-(--color-fg-2)">
           알림 판정 기준{" "}
           <span className="text-(--color-fg-4)">{usingDefault ? "(기본값 사용 중)" : "(직접 고친 것)"}</span>
         </label>
         {counter(criteria.length)}
       </div>
-      <p className="mt-1 mb-1.5 text-[12px] break-keep text-(--color-fg-4)">
-        어떤 메일을 물어볼지 고르는 기준입니다. 답의 형식(메일마다 Y/N 한 글자)은 따로
-        고정돼 있어서, 여기를 어떻게 적어도 에이전트가 지은 문장이 알림으로 나가지는
-        않습니다.
-      </p>
       <textarea
         id="triage-criteria"
         value={criteria}
@@ -235,17 +221,12 @@ export function AgentPrefsPanel() {
       <hr className="my-5 border-(--color-border-soft)" />
 
       {/* ── 평소 대화에 덧붙일 지시 ── */}
-      <div className="flex items-baseline justify-between gap-3">
+      <div className="mb-1.5 flex items-baseline justify-between gap-3">
         <label htmlFor="extra-instructions" className="text-sm font-medium text-(--color-fg)">
           에이전트에게 덧붙일 지시
         </label>
         {counter(extra.length)}
       </div>
-      <p className="mt-1 mb-1.5 text-[12px] break-keep text-(--color-fg-4)">
-        Discord 와 채팅창의 평소 대화에서 기본 안내문 <b>끝에</b> 붙습니다. 기본 안내문과
-        부딪치면 이쪽을 따릅니다. 기본 안내문 자체(도구 쓰는 법·카드 표시 규칙)는 바꾸지
-        않습니다.
-      </p>
       <textarea
         id="extra-instructions"
         value={extra}
@@ -278,15 +259,8 @@ export function AgentPrefsPanel() {
       <hr className="my-5 border-(--color-border-soft)" />
 
       {/* ── 세션 초기화 ── */}
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h3 className="text-sm font-medium text-(--color-fg)">대화 세션 초기화</h3>
-          <p className="mt-1 text-[13px] break-keep text-(--color-fg-4)">
-            에이전트가 기억하는 대화 맥락을 지웁니다. 채팅창의 &ldquo;새 대화&rdquo;, Discord 의{" "}
-            <code className="font-mono text-[12px]">/new</code> 와 같습니다. 장기 기억 메모와
-            예약 알림은 남습니다.
-          </p>
-        </div>
+      <div className="flex items-center justify-between gap-4">
+        <h3 className="text-sm font-medium text-(--color-fg)">대화 세션 초기화</h3>
         <button
           type="button"
           className={cn(ghost, "flex shrink-0 items-center gap-1.5 ring-1 ring-(--color-border-soft)")}

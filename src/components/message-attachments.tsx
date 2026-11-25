@@ -3,7 +3,6 @@
 import {
   AlertCircle,
   Download,
-  EyeOff,
   File as FileIcon,
   FileArchive,
   FileText,
@@ -20,18 +19,6 @@ import { cn } from "@/lib/utils";
 
 export interface MailBodyExtras {
   attachments: MailAttachment[];
-  /**
-   * **주소를 안 부른** 그림 수. 0 이면 아무 말도 하지 않는다.
-   *
-   * 이름이 tracker 지만 "추적하려던 것" 이라는 뜻은 아니다. "안 보이는 것"
-   * 이라는 뜻도 아니다 — 문턱에 걸리는 것 중에는 가로 구분선(600×1)이나 표
-   * 간격용 조각(20×1)처럼 **브라우저에서 그대로 보이는** 그림이 섞여 있다.
-   * 우리가 아는 것은 스타일로 가려져 있거나 몇 픽셀밖에 안 됐다는 것뿐이다
-   * (BlockedTrackerNote 의 글이 딱 그만큼만 말한다).
-   */
-  blockedTrackers: number;
-  /** 서버가 대신 받아 온 원격 그림 수. 모르면 null. */
-  proxiedImages: number | null;
 }
 
 /**
@@ -43,11 +30,7 @@ export interface MailBodyExtras {
  * 첨부는커녕 본문도 못 본다.
  */
 export function readMailExtras(detail: unknown): MailBodyExtras {
-  const raw = (detail ?? {}) as {
-    attachments?: unknown;
-    blockedTrackers?: unknown;
-    proxiedImages?: unknown;
-  };
+  const raw = (detail ?? {}) as { attachments?: unknown };
 
   const attachments: MailAttachment[] = Array.isArray(raw.attachments)
     ? raw.attachments.flatMap((item: unknown) => {
@@ -75,14 +58,7 @@ export function readMailExtras(detail: unknown): MailBodyExtras {
       })
     : [];
 
-  const count = (v: unknown) =>
-    typeof v === "number" && Number.isFinite(v) && v > 0 ? Math.floor(v) : null;
-
-  return {
-    attachments,
-    blockedTrackers: count(raw.blockedTrackers) ?? 0,
-    proxiedImages: count(raw.proxiedImages),
-  };
+  return { attachments };
 }
 
 /* ============================================================
@@ -242,7 +218,6 @@ const KEEP_WHEN_COLLAPSED = 4;
 export function AttachmentBar({
   attachments,
   urlFor,
-  unavailableNote,
 }: {
   attachments: MailAttachment[];
   /**
@@ -252,13 +227,6 @@ export function AttachmentBar({
    * 만들 수 없으면 null — 그러면 단추가 아니라 가만한 조각으로 그린다.
    */
   urlFor: (id: string) => string | null;
-  /**
-   * 하나도 받을 수 없을 때 덧붙일 한 줄.
-   *
-   * 왜 못 받는지는 부르는 쪽이 안다(이 창은 보관 사본도 그린다). 여기서
-   * 넘겨받지 않으면 아무 말도 하지 않는다.
-   */
-  unavailableNote?: string;
 }) {
   /** 지금 받고 있는 첨부의 id. 한 번에 하나만 받는다. */
   const [busy, setBusy] = useState<string | null>(null);
@@ -418,12 +386,6 @@ export function AttachmentBar({
         )}
       </ul>
 
-      {/* 목록은 보이는데 하나도 못 받는 경우 — 왜인지 말해 준다.
-          말이 없으면 사람은 "왜 단추가 없지" 에서 멈춘다. */}
-      {unavailableNote && !attachments.some((a) => urlFor(a.id) !== null) && (
-        <p className="mt-2 text-[11px] text-(--color-fg-4)">{unavailableNote}</p>
-      )}
-
       {/* 실패는 지운 자리가 아니라 목록 아래에 남긴다 — 다시 눌러 볼 수 있게. */}
       {failed && (
         <p
@@ -438,132 +400,5 @@ export function AttachmentBar({
         </p>
       )}
     </div>
-  );
-}
-
-/**
- * 부르지 않은 그림을 알린다.
- *
- * 조용히 지우면 사람은 "그림이 깨졌네" 로 읽는다. 무엇을 왜 안 불렀는지
- * 한 줄로 말해 준다. 색이 아니라 아이콘과 글로 뜻을 나눈다.
- *
- * ── **아는 만큼만 말한다** ──
- * 앞에서는 이 수를 "추적 이미지 N개" 라고 적었다. N 은 `isTrackingPixel` 이
- * 떨군 img 를 **전부** 센 값인데, 거기에는 추적과 무관한 것이 섞인다:
- * 다크모드용 로고 사본(`display:none`) · 모바일 전용 히어로 · 표 간격용 1×1
- * spacer. 실측: 진짜 추적 픽셀이 하나뿐인 메일에 **"추적 이미지 4개"** 가 떴다
- * (rig/fp2.ts — 다크모드 1 · 모바일 1 · spacer 1 이 함께 세어졌다).
- *
- * 우리는 발신자의 **의도를 알 수 없다.** 아는 것은 딱 하나 — "보이지 않게
- * 되어 있어서 부르지 않았다" 는 것뿐이다. 사람이 이 숫자를 읽고 프라이버시를
- * 판단하므로, 넘겨짚어 "추적" 이라 부르지 않고 우리가 실제로 한 일을 적는다.
- * 반대로 줄여 말해서도 안 된다 — 그중에 추적 픽셀이 있었다면 그것도 안 나갔다는
- * 사실은 이 줄이 말해 주어야 하는 값이다.
- *
- * ── 남은 그림이 있느냐에 따라 말이 달라져야 한다 ──
- * 앞에서는 막은 픽셀이 하나라도 있으면 무조건 "보낸 사람은 이 메일을 언제
- * 열었는지 알 수 없습니다" 라고 단언했다. **그런데 바로 다음 문장이 "나머지
- * 이미지 N개는 서버가 대신 받아 왔습니다" 였다.** 그 대신 받아 오는 요청은
- * 사람이 메일을 여는 바로 그 순간 발신자에게 나간다. 수신자마다 다른 주소
- * (`hero-<수신자ID>.jpg`)를 박아 두면 "누가 언제 열었는지" 는 그대로 샌다 —
- * 프록시가 가리는 것은 읽는 사람의 IP 와 브라우저뿐이다. 두 문장이 서로를
- * 부정하고 있었다.
- *
- * 사람이 이 글을 읽고 프라이버시를 판단한다. 나간 요청이 하나도 없을 때만
- * "알 수 없다" 고 말하고, 있을 때는 무엇이 가려지고 무엇이 안 가려지는지
- * 그대로 적는다.
- *
- * ── 막은 것이 없어도 말해야 한다 ──
- * 갈래를 나눈 뒤에도 이 줄은 `blocked > 0` 일 때만 떴다. 그래서 **추적 픽셀은
- * 없고 프록시로 나간 그림만 있는 메일**에서는 화면에 아무 말도 안 나왔다.
- * 실측(리그에서 blockedTrackers=0 · proxiedImages=1 인 메일을 열어 DOM 확인):
- * 안내 줄이 하나도 그려지지 않는다. 그런데 그 메일도 여는 순간 발신자에게
- * 요청이 나가고 열람 시각이 샌다 — 가장 조용한 경우가 가장 말이 없었다.
- * 침묵은 "아무 일도 없었다" 로 읽힌다. 나간 요청이 있으면 무엇이 있었는지
- * 반드시 적는다.
- */
-export function BlockedTrackerNote({
-  blocked,
-  proxiedImages,
-  archived = false,
-  className,
-}: {
-  blocked: number;
-  proxiedImages: number | null;
-  /** 보관 사본을 보고 있나. 그러면 요청은 **열 때마다** 나간다. */
-  archived?: boolean;
-  className?: string;
-}) {
-  const proxied =
-    proxiedImages !== null && proxiedImages > 0 ? proxiedImages : 0;
-  // 막은 것도 없고 나간 것도 없으면 할 말이 없다
-  if (blocked <= 0 && proxied <= 0) return null;
-
-  /**
-   * 프록시가 가리는 것과 못 가리는 것 — 세 갈래가 같은 문장을 쓴다.
-   *
-   * 보관 사본은 시제가 다르다. 사본 HTML 에 프록시 주소가 그대로 남아 있어
-   * **열 때마다** 요청이 새로 나간다 — 한 번 있었던 일이 아니다.
-   */
-  const proxyNote = archived ? (
-    <>
-      이 사본을 열 때마다 서버가 대신 받아 옵니다 — 읽는 사람의 IP 주소와
-      브라우저 정보는 가려지지만,{" "}
-      <b className="font-medium text-(--color-fg-3)">
-        사본을 연 시각은 그때마다 보낸 사람에게 전해집니다.
-      </b>
-    </>
-  ) : (
-    <>
-      서버가 대신 받아 왔습니다 — 읽는 사람의 IP 주소와 브라우저 정보는
-      가려지지만,{" "}
-      <b className="font-medium text-(--color-fg-3)">
-        이 메일을 연 시각은 보낸 사람에게 전해집니다.
-      </b>
-    </>
-  );
-
-  return (
-    <p
-      className={cn(
-        "flex items-start gap-1.5 text-[11px] text-(--color-fg-4)",
-        className,
-      )}
-    >
-      <EyeOff className="mt-0.5 h-3 w-3 shrink-0 text-(--color-warn)" />
-      <span className="min-w-0">
-        {blocked > 0 ? (
-          <>
-            스타일로 가려져 있거나 몇 픽셀 크기밖에 안 되는 이미지{" "}
-            <b className="font-medium text-(--color-fg-3)">{blocked}개</b>는
-            주소를 부르지 않았습니다 — 열람을 알리는 추적 픽셀이 흔히 이런
-            모습입니다. 다만 가로 구분선이나 표 간격용 조각처럼{" "}
-            <b className="font-medium text-(--color-fg-3)">
-              화면에 그대로 보이는
-            </b>{" "}
-            그림도 크기가 같아, 어느 쪽인지는 가려낼 수 없습니다.{" "}
-            {proxied > 0 ? (
-              <>나머지 이미지 {proxied}개는 {proxyNote}</>
-            ) : archived ? (
-              <>
-                바깥으로 나가는 요청이 하나도 없어, 이 사본을 열어도 보낸
-                사람은 알지 못합니다.
-              </>
-            ) : (
-              <>
-                바깥으로 나간 요청이 하나도 없어, 보낸 사람은 이 메일을
-                열었는지 알 수 없습니다.
-              </>
-            )}
-          </>
-        ) : (
-          // 막은 픽셀은 없고 프록시로 나간 그림만 있는 메일
-          <>
-            이미지 <b className="font-medium text-(--color-fg-3)">{proxied}개</b>
-            는 {proxyNote}
-          </>
-        )}
-      </span>
-    </p>
   );
 }

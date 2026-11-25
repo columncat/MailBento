@@ -115,18 +115,8 @@ export function AgentPanel() {
 
   return (
     <section className="rounded-[var(--radius-card)] bg-(--color-surface) p-6 ring-1 ring-(--color-border-soft)">
-      <h2 className="mb-1 text-lg font-medium text-(--color-fg)">에이전트</h2>
-      <p className="mb-4 text-sm break-keep text-(--color-fg-4)">
-        Claude 인증과 Discord 연결. 토큰은 화면에 다시 보이지 않으니, 빈 칸은 그대로
-        둔다는 뜻입니다.
-      </p>
+      <h2 className="mb-4 text-lg font-medium text-(--color-fg)">에이전트</h2>
 
-      {!s.writable && (
-        <p className="mb-4 rounded-lg bg-(--color-warn)/15 px-3 py-2 text-[13px] break-keep text-(--color-warn)">
-          이 배포는 설정을 파일이 아니라 환경변수로 받습니다. 여기서는 현재 상태만 보이고
-          고칠 수는 없습니다.
-        </p>
-      )}
       {err && (
         <p className="mb-4 rounded-lg bg-(--color-danger)/15 px-3 py-2 text-[13px] break-keep text-(--color-danger)">
           {err}
@@ -155,7 +145,7 @@ export function AgentPanel() {
       </div>
 
       <label className={label}>
-        새 OAuth 토큰 <span className="text-(--color-fg-4)">(구독 — 컴퓨터에서 claude setup-token)</span>
+        새 OAuth 토큰
       </label>
       <input
         type="password"
@@ -168,7 +158,7 @@ export function AgentPanel() {
       />
 
       <label className={label}>
-        또는 새 API 키 <span className="text-(--color-fg-4)">(종량 과금)</span>
+        또는 새 API 키
       </label>
       <input
         type="password"
@@ -181,7 +171,7 @@ export function AgentPanel() {
       />
 
       <label className={label}>
-        모델 <span className="text-(--color-fg-4)">(비우면 기본값)</span>
+        모델
       </label>
       <input
         type="text"
@@ -212,11 +202,6 @@ export function AgentPanel() {
       <hr className="my-5 border-(--color-border-soft)" />
 
       <h3 className="text-sm font-medium text-(--color-fg)">Discord</h3>
-      <p className="mt-1 text-[13px] break-keep text-(--color-fg-4)">
-        끄면 봇이 접속하지 않고 새 메일 검토 요청도 보내지 않습니다. 채팅창은 그대로
-        씁니다. <b>같은 봇 토큰을 두 대에서 동시에 켜면 서로를 끊습니다</b> — 예비
-        기계에서는 꺼 두세요.
-      </p>
 
       {!s.discordConfigured && (
         <>

@@ -242,12 +242,6 @@ export function RegionsSetting({ initial }: { initial: RegionInput[] }) {
           </span>
         )}
       </div>
-
-      <p className="text-[12px] break-keep text-(--color-fg-4)">
-        날씨는 위경도로 조회합니다. 좌표 표기와 표준시 라벨은 자동으로 만들어지므로
-        따로 적지 않습니다. 최대 {MAX_REGIONS}개까지 — 그보다 많으면 시계가 읽을 수
-        없이 좁아집니다.
-      </p>
     </div>
   );
 }

@@ -120,14 +120,8 @@ export function SettingsIO() {
   return (
     <section className="rounded-[var(--radius-card)] bg-(--color-surface) p-6 ring-1 ring-(--color-border-soft)">
       <header className="mb-3 flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-base font-medium text-(--color-fg)">
-            설정 백업 / 복원
-          </div>
-          <div className="text-xs text-(--color-fg-4)">
-            계정(IMAP)·메일박스 뷰·폴더·코크보드·메모·표시설정을 한 파일로
-            내보내고 불러옵니다.
-          </div>
+        <div className="min-w-0 text-base font-medium text-(--color-fg)">
+          설정 백업 / 복원
         </div>
         <div className="flex shrink-0 items-center gap-2">
           <button
@@ -163,8 +157,7 @@ export function SettingsIO() {
 
       <p className="flex items-start gap-1.5 text-[11px] text-(--color-fg-4)">
         <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0 text-[#d08700]" />
-        내보낸 파일에는 IMAP 앱 비밀번호가 <b>평문</b>으로 포함됩니다 — 안전한 곳에
-        보관하세요.
+        내보낸 파일에는 IMAP 앱 비밀번호가 <b>평문</b>으로 들어 있습니다.
       </p>
 
       {status.kind !== "idle" && (

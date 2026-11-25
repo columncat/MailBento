@@ -93,10 +93,6 @@ export function WidgetSearch() {
         <span className="font-mono text-[11px] tracking-[0.22em] uppercase text-(--color-fg-2)">
           Search
         </span>
-        <span className="flex items-center gap-1 font-mono text-[10px] text-(--color-fg-4)">
-          <CornerDownLeft className="h-2.5 w-2.5" />
-          to go
-        </span>
       </div>
       <div className="flex min-h-0 flex-1 flex-col gap-2.5">
         {ENGINES.map((e) => (

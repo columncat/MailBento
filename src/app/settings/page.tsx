@@ -88,13 +88,8 @@ export default async function SettingsPage({
             <div className="grid h-10 w-10 shrink-0 place-items-center rounded-lg bg-(--color-bg-2) ring-1 ring-(--color-border)">
               <ProviderIcon size={22} />
             </div>
-            <div className="min-w-0">
-              <div className="text-base font-medium text-(--color-fg)">
-                메일박스 (IMAP)
-              </div>
-              <div className="text-xs text-(--color-fg-4)">
-                IMAP + 앱 비밀번호. 복제 후 쿼리로 폴더/검색 뷰를 추가할 수 있음.
-              </div>
+            <div className="min-w-0 text-base font-medium text-(--color-fg)">
+              메일박스 (IMAP)
             </div>
           </div>
           <Link
@@ -109,7 +104,7 @@ export default async function SettingsPage({
         {accounts.length === 0 ? (
           <div className="rounded-lg border border-dashed border-(--color-border) py-8 text-center text-xs text-(--color-fg-4)">
             <Mail className="mx-auto mb-2 h-4 w-4" />
-            연결된 메일박스 없음 — “계정 추가” 또는 설정 불러오기로 시작하세요.
+            연결된 메일박스 없음
           </div>
         ) : (
           <ul className="divide-y divide-(--color-border-soft)">
@@ -145,10 +140,7 @@ export default async function SettingsPage({
 
       {/* 시계 위젯 지역 */}
       <section className="rounded-[var(--radius-card)] bg-(--color-surface) p-6 ring-1 ring-(--color-border-soft)">
-        <h2 className="mb-1 text-lg font-medium text-(--color-fg)">시계 지역</h2>
-        <p className="mb-4 text-sm text-(--color-fg-4)">
-          위젯 헤더의 시계·날씨에 띄울 곳입니다.
-        </p>
+        <h2 className="mb-4 text-lg font-medium text-(--color-fg)">시계 지역</h2>
         <RegionsSetting initial={appConfig.regions} />
       </section>
 

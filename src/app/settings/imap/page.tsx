@@ -20,17 +20,12 @@ export default function ImapSettingsPage() {
           <div className="grid h-10 w-10 place-items-center rounded-lg bg-(--color-surface) ring-1 ring-(--color-border)">
             <ProviderIcon size={22} />
           </div>
-          <div>
-            <h1
-              className="text-xl leading-tight"
-              style={{ fontFamily: "var(--font-serif)" }}
-            >
-              IMAP 계정 추가
-            </h1>
-            <p className="text-[11.5px] text-(--color-fg-4)">
-              아래 "서비스" 에서 자주 쓰는 IMAP 서버를 선택하거나 직접 입력하세요.
-            </p>
-          </div>
+          <h1
+            className="text-xl leading-tight"
+            style={{ fontFamily: "var(--font-serif)" }}
+          >
+            IMAP 계정 추가
+          </h1>
         </div>
       </header>
 

@@ -95,7 +95,7 @@ export function EditAccountForm({
         </div>
       </div>
 
-      <Field label="표시 이름" hint="카드 헤더에 보일 이름">
+      <Field label="표시 이름">
         <input
           value={displayName}
           onChange={(e) => setDisplayName(e.target.value)}
@@ -104,10 +104,7 @@ export function EditAccountForm({
         />
       </Field>
 
-      <Field
-        label="표시 이메일"
-        hint={`비워두면 실제 이메일 (${realEmail}) 이 표시됩니다. 표시 전용 — 메일 가져오기엔 영향 없음.`}
-      >
+      <Field label="표시 이메일">
         <input
           value={displayEmail}
           onChange={(e) => setDisplayEmail(e.target.value)}
@@ -116,10 +113,7 @@ export function EditAccountForm({
         />
       </Field>
 
-      <Field
-        label="아이콘 URL / 업로드"
-        hint="비워두면 기본 메일 아이콘. URL 입력 또는 이미지 파일 업로드(자동 축소)."
-      >
+      <Field label="아이콘 URL / 업로드">
         <div className="flex gap-2">
           <input
             value={iconUrl}
@@ -131,10 +125,7 @@ export function EditAccountForm({
         </div>
       </Field>
 
-      <Field
-        label="바로가기 링크"
-        hint="카드 우측 상단 아이콘 클릭 시 새 탭에서 열림. 비워두면 provider 기본 웹메일 URL."
-      >
+      <Field label="바로가기 링크">
         <input
           value={webUrl}
           onChange={(e) => setWebUrl(e.target.value)}
@@ -143,47 +134,27 @@ export function EditAccountForm({
         />
       </Field>
 
-      {
-        <Field
-          label="IMAP 폴더/검색 쿼리"
-          hint="비워두면 받은편지함(INBOX). 채우면 이 박스는 해당 결과만 보여줌."
-        >
-          <input
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="(비워두면 INBOX 기본)"
-            className={`${inputCls} font-mono`}
-          />
-          <div className="mt-2 flex flex-wrap gap-1.5">
-            {IMAP_QUERY_EXAMPLES.map((ex) => (
-              <button
-                key={ex.q}
-                type="button"
-                onClick={() => setQuery(ex.q)}
-                className="rounded-full bg-(--color-bg-2) px-2.5 py-1 text-[10.5px] text-(--color-fg-3) ring-1 ring-(--color-border-soft) hover:bg-(--color-surface-hi) hover:text-(--color-fg-2)"
-                title={ex.q}
-              >
-                {ex.label}
-              </button>
-            ))}
-          </div>
-          {
-            <p className="mt-2 text-[10.5px] leading-relaxed text-(--color-fg-4)">
-              토큰(공백 = AND):{" "}
-              <code className="text-(--color-fg-3)">folder:</code>{" "}
-              <code className="text-(--color-fg-3)">from:</code>{" "}
-              <code className="text-(--color-fg-3)">to:</code>{" "}
-              <code className="text-(--color-fg-3)">subject:</code>{" "}
-              <code className="text-(--color-fg-3)">text:</code>{" "}
-              <code className="text-(--color-fg-3)">since:YYYY-MM-DD</code>{" "}
-              <code className="text-(--color-fg-3)">before:</code>{" "}
-              <code className="text-(--color-fg-3)">unseen</code>/
-              <code className="text-(--color-fg-3)">seen</code>. 공백 포함 값은{" "}
-              {'"따옴표"'}. 예: <code>folder:보낸메일함 from:naver.com unseen</code>
-            </p>
-          }
-        </Field>
-      }
+      <Field label="IMAP 폴더/검색 쿼리">
+        <input
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          placeholder="(비워두면 INBOX 기본)"
+          className={`${inputCls} font-mono`}
+        />
+        <div className="mt-2 flex flex-wrap gap-1.5">
+          {IMAP_QUERY_EXAMPLES.map((ex) => (
+            <button
+              key={ex.q}
+              type="button"
+              onClick={() => setQuery(ex.q)}
+              className="rounded-full bg-(--color-bg-2) px-2.5 py-1 text-[10.5px] text-(--color-fg-3) ring-1 ring-(--color-border-soft) hover:bg-(--color-surface-hi) hover:text-(--color-fg-2)"
+              title={ex.q}
+            >
+              {ex.label}
+            </button>
+          ))}
+        </div>
+      </Field>
 
       {error && (
         <div className="rounded-lg bg-(--color-danger)/10 px-3 py-2 text-xs text-(--color-danger) ring-1 ring-(--color-danger)/30">
@@ -217,18 +188,15 @@ const inputCls =
 
 function Field({
   label,
-  hint,
   children,
 }: {
   label: string;
-  hint?: string;
   children: React.ReactNode;
 }) {
   return (
     <label className="flex flex-col gap-1.5">
       <span className="text-xs font-medium text-(--color-fg-2)">{label}</span>
       {children}
-      {hint && <span className="text-[11px] text-(--color-fg-4)">{hint}</span>}
     </label>
   );
 }

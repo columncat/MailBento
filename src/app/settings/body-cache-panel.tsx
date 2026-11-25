@@ -67,16 +67,8 @@ export function BodyCachePanel({ initial }: { initial: BodyCacheInfo }) {
   return (
     <section className="rounded-[var(--radius-card)] bg-(--color-surface) p-6 ring-1 ring-(--color-border-soft)">
       <header className="mb-3 flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-base font-medium text-(--color-fg)">
-            메일 본문 캐시
-          </div>
-          <div className="text-xs text-(--color-fg-4)">
-            메일 본문을 최대 100통까지 담아 두었다가 열 때 씁니다. 열어 본
-            메일에 더해, 새로 온 메일은 자동 수집이 미리 받아 둡니다(최대
-            30통 — 나머지 70통은 열어 본 메일 몫으로 남습니다). 비워도 메일은
-            그대로이고, 다음에 열 때 다시 받아 옵니다.
-          </div>
+        <div className="min-w-0 text-base font-medium text-(--color-fg)">
+          메일 본문 캐시
         </div>
         <button
           type="button"

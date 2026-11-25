@@ -533,10 +533,6 @@ export function Dashboard({
         archiveId={openArchiveId}
         onClose={() => setOpenArchiveId(null)}
       />
-
-      <footer className="mt-2 text-center text-xs text-(--color-fg-4)">
-        MailBento · 박스 드래그로 순서변경
-      </footer>
     </main>
   );
 }
@@ -547,17 +543,9 @@ function EmptyState() {
       <div className="grid h-16 w-16 place-items-center rounded-2xl bg-(--color-surface) ring-1 ring-(--color-border-soft)">
         <Mail className="h-7 w-7 text-(--color-accent)" />
       </div>
-      <div>
-        <h2
-          className="mb-1 text-xl"
-          style={{ fontFamily: "var(--font-serif)" }}
-        >
-          연결된 계정이 없습니다
-        </h2>
-        <p className="text-sm text-(--color-fg-3)">
-          오른쪽 위 “계정” 에서 Gmail / Outlook / IMAP 메일을 추가하세요.
-        </p>
-      </div>
+      <h2 className="text-xl" style={{ fontFamily: "var(--font-serif)" }}>
+        연결된 계정이 없습니다
+      </h2>
       <Link
         href="/settings"
         className="rounded-full bg-(--color-accent) px-5 py-2 text-sm font-medium text-(--color-bg) hover:bg-(--color-accent-strong)"

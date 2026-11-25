@@ -162,7 +162,7 @@ export function WidgetArchive({
         {shown.length === 0 ? (
           <div className="rounded-lg border border-dashed border-(--color-border) py-6 text-center text-sm break-keep text-(--color-fg-4)">
             <Archive className="mx-auto mb-1.5 h-4 w-4" />
-            메일함에서 보관 버튼을 눌러 담아 두세요
+            보관한 메일이 없습니다
           </div>
         ) : (
           <ul className="flex flex-col gap-1.5">

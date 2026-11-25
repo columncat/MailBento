@@ -117,7 +117,7 @@ export function FolderEditor({ folder, open, onClose, onSave }: Props) {
               ))}
               {links.length === 0 && (
                 <div className="rounded-lg border border-dashed border-(--color-border) py-8 text-center text-xs text-(--color-fg-4)">
-                  아직 링크가 없습니다 — "링크 추가" 로 시작하세요
+                  링크가 없습니다
                 </div>
               )}
             </div>

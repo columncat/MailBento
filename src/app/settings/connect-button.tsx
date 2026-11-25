@@ -6,7 +6,6 @@ import Link from "next/link";
 
 export interface ConnectOption {
   label: string;
-  description?: string;
   href: string;
 }
 
@@ -53,11 +52,6 @@ export function ConnectButton({ options }: { options: ConnectOption[] }) {
                 <span className="text-sm font-medium text-(--color-fg)">
                   {opt.label}
                 </span>
-                {opt.description && (
-                  <span className="text-[11px] text-(--color-fg-4)">
-                    {opt.description}
-                  </span>
-                )}
               </Link>
             </DM.Item>
           ))}

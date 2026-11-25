@@ -9,7 +9,6 @@ interface Preset {
   label: string;
   host: string;
   port: number;
-  hint: string;
   emailPlaceholder: string;
 }
 
@@ -18,56 +17,48 @@ const PRESETS: Record<string, Preset> = {
     label: "직접 입력",
     host: "",
     port: 993,
-    hint: "임의의 IMAP 서버 호스트/포트와 자격증명을 입력하세요.",
     emailPlaceholder: "you@example.com",
   },
   naver: {
     label: "Naver Mail",
     host: "imap.naver.com",
     port: 993,
-    hint: "Naver 메일 → 환경설정 → POP3/IMAP 사용 → 앱 비밀번호 발급 필요.",
     emailPlaceholder: "myname@naver.com",
   },
   icloud: {
     label: "iCloud Mail",
     host: "imap.mail.me.com",
     port: 993,
-    hint: "appleid.apple.com → 로그인 보안 → 앱 암호 생성 필요.",
     emailPlaceholder: "name@icloud.com",
   },
   yandex: {
     label: "Yandex Mail",
     host: "imap.yandex.com",
     port: 993,
-    hint: "Yandex 메일 설정에서 IMAP 활성화 + 앱 비밀번호 발급.",
     emailPlaceholder: "name@yandex.com",
   },
   fastmail: {
     label: "Fastmail",
     host: "imap.fastmail.com",
     port: 993,
-    hint: "Fastmail 설정 → Password & Security → New App Password.",
     emailPlaceholder: "name@fastmail.com",
   },
   daum: {
     label: "Daum Mail",
     host: "imap.daum.net",
     port: 993,
-    hint: "Daum 메일 → 환경설정 → IMAP/SMTP 사용 + 2단계 인증 시 앱 비밀번호.",
     emailPlaceholder: "name@daum.net",
   },
   gmx: {
     label: "GMX",
     host: "imap.gmx.com",
     port: 993,
-    hint: "GMX 보안 설정에서 IMAP 활성화.",
     emailPlaceholder: "name@gmx.com",
   },
   office365: {
     label: "Office 365 (앱 비밀번호 가능 시)",
     host: "outlook.office365.com",
     port: 993,
-    hint: "조직이 앱 비밀번호를 허용해야 동작합니다. 보통은 위의 'Outlook → IMAP via OAuth' 권장.",
     emailPlaceholder: "you@org.com",
   },
 };
@@ -92,7 +83,7 @@ export function ImapForm() {
 
   return (
     <form action={action} className="flex flex-col gap-4">
-      <Field label="서비스" hint={preset.hint}>
+      <Field label="서비스">
         <select
           value={presetKey}
           onChange={(e) => onChangePreset(e.target.value)}
@@ -106,7 +97,7 @@ export function ImapForm() {
         </select>
       </Field>
 
-      <Field label="표시 이름" hint="대시보드 카드 헤더에 보일 이름">
+      <Field label="표시 이름">
         <input
           name="displayName"
           required
@@ -154,7 +145,7 @@ export function ImapForm() {
         </Field>
       </div>
 
-      <Field label="사용자명" hint="보통 이메일 주소 전체">
+      <Field label="사용자명">
         <input
           name="username"
           required
@@ -188,10 +179,6 @@ export function ImapForm() {
         {pending && <Loader2 className="h-4 w-4 animate-spin" />}
         {pending ? "접속 확인 중…" : "연결 + 저장"}
       </button>
-
-      <p className="text-center text-[11px] text-(--color-fg-4)">
-        저장 전에 IMAP 접속을 한 번 시도해서 자격증명이 맞는지 확인합니다.
-      </p>
     </form>
   );
 }
@@ -201,18 +188,15 @@ const inputCls =
 
 function Field({
   label,
-  hint,
   children,
 }: {
   label: string;
-  hint?: string;
   children: React.ReactNode;
 }) {
   return (
     <label className="flex flex-col gap-1.5">
       <span className="text-xs font-medium text-(--color-fg-2)">{label}</span>
       {children}
-      {hint && <span className="text-[11px] text-(--color-fg-4)">{hint}</span>}
     </label>
   );
 }

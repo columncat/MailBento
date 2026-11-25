@@ -12,7 +12,6 @@ import type { MailMessageDetail } from "@/lib/providers/types";
 
 import {
   AttachmentBar,
-  BlockedTrackerNote,
   readMailExtras,
 } from "./message-attachments";
 import { MarkPicker } from "./message-mark";
@@ -173,7 +172,7 @@ export function MessageModal({
     return () => undo.forEach((f) => f());
   }, [detail?.html]);
 
-  // 서버가 본문에 얹어 보내는 첨부 목록·추적 픽셀 수. 없으면 빈 값이 온다.
+  // 서버가 본문에 얹어 보내는 첨부 목록. 없으면 빈 값이 온다.
   const extras = readMailExtras(detail);
 
   /**
@@ -215,7 +214,7 @@ export function MessageModal({
         <Dialog.Content
           aria-describedby={undefined}
           onPointerDown={(e) => e.stopPropagation()}
-          className="fixed top-1/2 left-1/2 z-50 flex max-h-[88vh] w-[min(960px,94vw)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-[var(--radius-card)] bg-(--color-surface) ring-1 ring-(--color-border) shadow-2xl data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95"
+          className="fixed top-1/2 left-1/2 z-50 flex h-[94vh] w-[min(1800px,97vw)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-[var(--radius-card)] bg-(--color-surface) ring-1 ring-(--color-border) shadow-2xl data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95"
         >
           {/* 헤더 */}
           <div className="flex items-start justify-between gap-4 border-b border-(--color-border-soft) px-6 py-4">
@@ -317,37 +316,22 @@ export function MessageModal({
             </div>
           )}
 
-          {/* 첨부와 알림 — 본문 위, 스크롤 밖.
+          {/* 첨부 — 본문 위, 스크롤 밖.
               긴 뉴스레터의 맨 아래까지 내려가야 첨부가 나오면 없는 것과 같다. */}
-          {/* 프록시로 나간 그림만 있는 메일도 알려야 한다 — 여기서
-              blockedTrackers 만 보면 안내 줄이 아예 안 그려져, "연 시각이
-              샌다" 는 사실을 사람이 볼 자리가 없어진다. */}
-          {detail &&
-            (extras.attachments.length > 0 ||
-              extras.blockedTrackers > 0 ||
-              (extras.proxiedImages ?? 0) > 0) && (
-              <div className="shrink-0 border-b border-(--color-border-soft) px-6 py-3">
-                {extras.attachments.length > 0 && (
-                  <AttachmentBar
-                    // 다른 메일로 넘어가면 받던 것·펼친 상태를 버린다
-                    key={`${archiveId ?? "live"}:${accountId}:${messageId}`}
-                    attachments={extras.attachments}
-                    urlFor={attachmentUrl}
-                    unavailableNote="보관 사본에는 첨부 목록만 남습니다 — 파일은 원본 메일을 열어 받아 주세요."
-                  />
-                )}
-                <BlockedTrackerNote
-                  blocked={extras.blockedTrackers}
-                  proxiedImages={extras.proxiedImages}
-                  // 보관 사본은 열 때마다 요청이 새로 나간다 — 시제가 다르다
-                  archived={!!archiveId}
-                  className={extras.attachments.length > 0 ? "mt-2.5" : undefined}
-                />
-              </div>
-            )}
+          {detail && extras.attachments.length > 0 && (
+            <div className="shrink-0 border-b border-(--color-border-soft) px-6 py-3">
+              <AttachmentBar
+                // 다른 메일로 넘어가면 받던 것·펼친 상태를 버린다
+                key={`${archiveId ?? "live"}:${accountId}:${messageId}`}
+                attachments={extras.attachments}
+                urlFor={attachmentUrl}
+              />
+            </div>
+          )}
 
-          {/* 본문 */}
-          <div className="scrollbar-thin flex-1 overflow-y-auto">
+          {/* 본문 — 창 높이가 고정이라 남는 자리를 전부 받는다 (min-h-0 이 없으면
+              flex 자식이 내용 높이 아래로 줄지 않아 스크롤 대신 창 밖으로 넘친다) */}
+          <div className="scrollbar-thin min-h-0 flex-1 overflow-y-auto">
             {loading ? (
               <LoadingBody />
             ) : error ? (
